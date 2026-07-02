@@ -17,8 +17,8 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 
 use std::sync::{Arc, Mutex};
 
+use crate::bar::{button_layout, hit_test, BarState};
 use crate::hyprland::switch_workspace;
-use crate::{button_layout, hit_test, BarState};
 
 // ==================== APP STATE / DISPATCH ====================
 

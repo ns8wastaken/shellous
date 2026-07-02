@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use crate::BarState;
+use crate::bar::BarState;
 
 // ==================== HYPRLAND IPC ====================
 
