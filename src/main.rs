@@ -1,34 +1,31 @@
+mod hyprland;
+mod wayland;
+
+use khronos_egl as egl;
+use wayland_egl::WlEglSurface;
+
 use wayland_client::{
-    Connection, Dispatch, Proxy, QueueHandle,
-    globals::{registry_queue_init, GlobalListContents},
+    Connection, Proxy,
+    globals::registry_queue_init,
     protocol::{
         wl_compositor::WlCompositor,
-        wl_pointer::{ButtonState, Event as PointerEvent, WlPointer},
-        wl_registry,
-        wl_seat::{Capability, Event as SeatEvent, WlSeat},
-        wl_surface::WlSurface,
+        wl_seat::WlSeat,
     },
 };
 
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
-    zwlr_layer_surface_v1::{Anchor, Event as LayerEvent, ZwlrLayerSurfaceV1},
+    zwlr_layer_surface_v1::Anchor,
 };
 
-use khronos_egl as egl;
-use wayland_egl::WlEglSurface;
-
-use serde::Deserialize;
-
 use std::ffi::CString;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::net::UnixStream;
 use std::ptr;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
 use gl::types::*;
+
+use crate::hyprland::{hypr_sockets, refresh_bar_state, spawn_event_listener};
+use crate::wayland::AppState;
 
 // ==================== SHADER SOURCES ====================
 
@@ -91,114 +88,41 @@ void main() {
 }
 "#;
 
-// ==================== HYPRLAND IPC ====================
-
-#[derive(Debug, Clone, Deserialize)]
-struct Workspace {
-    id: i32,
-    #[allow(dead_code)]
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ActiveWorkspace {
-    id: i32,
-}
-
-fn hypr_sockets() -> (String, String) {
-    let sig = std::env::var("HYPRLAND_INSTANCE_SIGNATURE")
-        .expect("HYPRLAND_INSTANCE_SIGNATURE not set -- is this running under Hyprland?");
-    let runtime = std::env::var("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR not set");
-    (
-        format!("{runtime}/hypr/{sig}/.socket.sock"),
-        format!("{runtime}/hypr/{sig}/.socket2.sock"),
-    )
-}
-
-fn hypr_command(cmd_socket: &str, cmd: &str) -> std::io::Result<String> {
-    let mut stream = UnixStream::connect(cmd_socket)?;
-    stream.write_all(cmd.as_bytes())?;
-    stream.shutdown(std::net::Shutdown::Write)?;
-    let mut resp = String::new();
-    stream.read_to_string(&mut resp)?;
-    Ok(resp)
-}
-
-fn get_workspaces(cmd_socket: &str) -> std::io::Result<Vec<Workspace>> {
-    let raw = hypr_command(cmd_socket, "j/workspaces")?;
-    let mut list: Vec<Workspace> = serde_json::from_str(&raw)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    list.sort_by_key(|w| w.id);
-    Ok(list)
-}
-
-fn get_active_workspace(cmd_socket: &str) -> std::io::Result<i32> {
-    let raw = hypr_command(cmd_socket, "j/activeworkspace")?;
-    let active: ActiveWorkspace = serde_json::from_str(&raw)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    Ok(active.id)
-}
-
-
-fn switch_workspace(cmd_socket: &str, id: i32) {
-    let cmd_socket = cmd_socket.to_string();
-    let cmd = format!("dispatch hl.dsp.focus({{ workspace = {id} }})");
-    thread::spawn(move || match hypr_command(&cmd_socket, &cmd) {
-        Ok(resp) => eprintln!("[bar] {cmd} -> {:?}", resp.trim()),
-        Err(e) => eprintln!("[bar] {cmd} FAILED: {e}"),
-    });
-}
-
 // ==================== SHARED BAR STATE ====================
 
-struct BarState {
-    workspaces: Vec<Workspace>,
-    active_id: i32,
+pub struct BarState {
+    pub workspaces: Vec<hyprland::Workspace>,
+    pub active_id: i32,
 }
 
-fn refresh_bar_state(cmd_socket: &str, shared: &Arc<Mutex<BarState>>) {
-    let workspaces = get_workspaces(cmd_socket).unwrap_or_else(|e| {
-        eprintln!("[bar] get_workspaces failed: {e}");
-        Vec::new()
-    });
-    let active_id = get_active_workspace(cmd_socket).unwrap_or_else(|e| {
-        eprintln!("[bar] get_active_workspace failed: {e}");
-        -1
-    });
-    eprintln!(
-        "[bar] refreshed: {} workspaces, active={active_id}",
-        workspaces.len()
-    );
-    let mut s = shared.lock().unwrap();
-    s.workspaces = workspaces;
-    s.active_id = active_id;
+// ==================== WORKSPACE BUTTON LAYOUT ====================
+// Mirrors the shader's math exactly -- if you change one, change the other.
+
+pub struct ButtonRect {
+    cx: f32,
+    cy: f32,
+    hw: f32,
+    hh: f32,
 }
 
-/// Listens on Hyprland's event socket (.socket2.sock) and refreshes the
-/// shared workspace list/active id whenever something workspace-related
-/// happens. Reconnects if Hyprland restarts or the socket hiccups.
-fn spawn_event_listener(cmd_socket: String, evt_socket: String, shared: Arc<Mutex<BarState>>) {
-    thread::spawn(move || loop {
-        match UnixStream::connect(&evt_socket) {
-            Ok(stream) => {
-                let reader = BufReader::new(stream);
-                for line in reader.lines() {
-                    let Ok(line) = line else { break };
-                    if line.starts_with("workspace")
-                        || line.starts_with("createworkspace")
-                        || line.starts_with("destroyworkspace")
-                        || line.starts_with("moveworkspace")
-                        || line.starts_with("focusedmon")
-                    {
-                        refresh_bar_state(&cmd_socket, &shared);
-                    }
-                }
-            }
-            Err(_) => {
-                thread::sleep(Duration::from_secs(1));
-            }
-        }
-    });
+pub fn button_layout(count: usize, height: f32) -> Vec<ButtonRect> {
+    (0..count)
+        .map(|i| ButtonRect {
+            cx: 24.0 + i as f32 * 32.0,
+            cy: height * 0.5,
+            hw: 11.0,
+            hh: 9.0,
+        })
+        .collect()
+}
+
+pub fn hit_test(buttons: &[ButtonRect], x: f32, y: f32) -> Option<usize> {
+    buttons.iter().position(|b| {
+        x >= b.cx - b.hw
+        && x <= b.cx + b.hw
+        && y >= b.cy - b.hh
+        && y <= b.cy + b.hh
+    })
 }
 
 // ==================== OPENGL HELPERS ====================
@@ -242,212 +166,6 @@ unsafe fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
         }
 
         program
-    }
-}
-
-// ==================== WORKSPACE BUTTON LAYOUT ====================
-// Mirrors the shader's math exactly -- if you change one, change the other.
-
-struct ButtonRect {
-    cx: f32,
-    cy: f32,
-    hw: f32,
-    hh: f32,
-}
-
-fn button_layout(count: usize, height: f32) -> Vec<ButtonRect> {
-    (0..count)
-        .map(|i| ButtonRect {
-            cx: 24.0 + i as f32 * 32.0,
-            cy: height * 0.5,
-            hw: 11.0,
-            hh: 9.0,
-        })
-        .collect()
-}
-
-fn hit_test(buttons: &[ButtonRect], x: f32, y: f32) -> Option<usize> {
-    buttons.iter().position(|b| {
-        x >= b.cx - b.hw
-        && x <= b.cx + b.hw
-        && y >= b.cy - b.hh
-        && y <= b.cy + b.hh
-    })
-}
-
-// ==================== APP STATE / DISPATCH ====================
-
-struct AppState {
-    configured: bool,
-    width: i32,
-    height: i32,
-    pointer_pos: Option<(f64, f64)>,
-    bar: Arc<Mutex<BarState>>,
-    cmd_socket: String,
-}
-
-impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppState {
-    fn event(
-        _: &mut Self,
-        _: &wl_registry::WlRegistry,
-        _: wl_registry::Event,
-        _: &GlobalListContents,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-impl Dispatch<WlCompositor, ()> for AppState {
-    fn event(
-        _: &mut Self,
-        _: &WlCompositor,
-        _: wayland_client::protocol::wl_compositor::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-impl Dispatch<WlSurface, ()> for AppState {
-    fn event(
-        _: &mut Self,
-        _: &WlSurface,
-        _: wayland_client::protocol::wl_surface::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-impl Dispatch<ZwlrLayerShellV1, ()> for AppState {
-    fn event(
-        _: &mut Self,
-        _: &ZwlrLayerShellV1,
-        _: wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
-    fn event(
-        state: &mut Self,
-        proxy: &ZwlrLayerSurfaceV1,
-        event: LayerEvent,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        if let LayerEvent::Configure { serial, width, height } = event {
-            proxy.ack_configure(serial);
-            if width > 0 {
-                state.width = width as i32;
-            }
-            if height > 0 {
-                state.height = height as i32;
-            }
-            state.configured = true;
-        }
-    }
-}
-
-impl Dispatch<WlSeat, ()> for AppState {
-    fn event(
-        _: &mut Self,
-        seat: &WlSeat,
-        event: SeatEvent,
-        _: &(),
-        _: &Connection,
-        qh: &QueueHandle<Self>,
-    ) {
-        if let SeatEvent::Capabilities { capabilities } = event {
-            if let wayland_client::WEnum::Value(caps) = capabilities {
-                if caps.contains(Capability::Pointer) {
-                    seat.get_pointer(qh, ());
-                }
-            }
-        }
-    }
-}
-
-impl Dispatch<WlPointer, ()> for AppState {
-    fn event(
-        state: &mut Self,
-        _: &WlPointer,
-        event: PointerEvent,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        match event {
-            PointerEvent::Enter {
-                surface_x,
-                surface_y,
-                ..
-            } => {
-                eprintln!("[bar] pointer enter at ({surface_x:.1}, {surface_y:.1})");
-                state.pointer_pos = Some((surface_x, surface_y));
-            }
-            PointerEvent::Motion {
-                surface_x,
-                surface_y,
-                ..
-            } => {
-                state.pointer_pos = Some((surface_x, surface_y));
-            }
-            PointerEvent::Leave { .. } => {
-                eprintln!("[bar] pointer leave");
-                state.pointer_pos = None;
-            }
-            PointerEvent::Button {
-                button,
-                state: btn_state,
-                ..
-            } => {
-                const BTN_LEFT: u32 = 0x110;
-                let is_press = matches!(
-                    btn_state,
-                    wayland_client::WEnum::Value(ButtonState::Pressed)
-                );
-                eprintln!(
-                    "[bar] button event: button=0x{button:x} press={is_press} pointer_pos={:?}",
-                    state.pointer_pos
-                );
-                if button == BTN_LEFT && is_press {
-                    if let Some((px, py)) = state.pointer_pos {
-                        let bar = state.bar.lock().unwrap();
-                        let buttons = button_layout(bar.workspaces.len(), state.height as f32);
-                        eprintln!(
-                            "[bar] hit-testing ({px:.1}, {py:.1}) against {} buttons (ws={:?})",
-                            buttons.len(),
-                            bar.workspaces.iter().map(|w| w.id).collect::<Vec<_>>()
-                        );
-                        // Wayland pointer coords are top-left origin, y-down.
-                        // The shader's `p` space is also top-left/y-down here
-                        // since we sample uv against the same resolution
-                        // without flipping -- if buttons feel offset on your
-                        // compositor, flip py to (height - py).
-                        match hit_test(&buttons, px as f32, py as f32) {
-                            Some(idx) => {
-                                let id = bar.workspaces[idx].id;
-                                drop(bar);
-                                eprintln!("[bar] hit button {idx} -> workspace {id}");
-                                switch_workspace(&state.cmd_socket, id);
-                            }
-                            None => eprintln!("[bar] click missed all buttons"),
-                        }
-                    } else {
-                        eprintln!("[bar] click but no pointer_pos recorded");
-                    }
-                }
-            }
-            _ => {}
-        }
     }
 }
 
