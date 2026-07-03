@@ -1,6 +1,6 @@
 pub mod bar;
 
-use crate::display::ShellState;
+use crate::shell_state::ShellState;
 use crate::renderer::programs::rect::RectProgram;
 
 /// A single panel drawn on the bar surface.

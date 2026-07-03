@@ -1,5 +1,5 @@
 use crate::bar;
-use crate::display::ShellState;
+use crate::shell_state::ShellState;
 use crate::renderer::panel::Panel;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
@@ -78,8 +78,8 @@ fn draw_background(
             br: CornerShape::Convex,
             bl: CornerShape::Concave,
         },
-        radius: Corners { tl: 0.0, tr: 12.0, br: 12.0, bl: 10.0 },
-        logical_inset: LogicalInset { right: 10.0, bottom: 10.0, ..Default::default() },
+        radius: Corners { tl: 0.0, tr: 12.0, br: 12.0, bl: 18.0 },
+        logical_inset: LogicalInset { right: 10.0, bottom: 18.0, ..Default::default() },
         ..Default::default()
     };
     rect.draw(surface_w, surface_h, panel_w, panel_h, &style, Mat3::identity());

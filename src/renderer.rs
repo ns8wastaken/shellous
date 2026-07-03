@@ -7,7 +7,7 @@ use wayland_client::{Connection, Proxy};
 
 use gl::types::*;
 
-use crate::display::ShellState;
+use crate::shell_state::ShellState;
 use crate::renderer::panel::Panel;
 use crate::renderer::programs::rect::RectProgram;
 

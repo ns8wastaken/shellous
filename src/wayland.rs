@@ -18,7 +18,8 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 };
 
 use crate::bar::{button_layout, hit_test};
-use crate::display::{ShellState, SurfaceState};
+use crate::layer_surface::SurfaceState;
+use crate::shell_state::ShellState;
 
 // ==================== WAYLAND DISPATCH ====================
 
@@ -72,7 +73,7 @@ impl Dispatch<ZwlrLayerShellV1, ()> for ShellState {
 
 impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
     fn event(
-        _state: &mut Self,
+        state: &mut Self,
         proxy: &ZwlrLayerSurfaceV1,
         event: LayerEvent,
         data: &Arc<Mutex<SurfaceState>>,
@@ -87,37 +88,38 @@ impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
             }
             if height > 0 {
                 ss.height = height as i32;
+                state.pointer_surface_height = height as f32;
             }
             ss.configured = true;
         }
     }
 }
 
-impl Dispatch<WlSeat, Arc<Mutex<SurfaceState>>> for ShellState {
+impl Dispatch<WlSeat, ()> for ShellState {
     fn event(
         _: &mut Self,
         seat: &WlSeat,
         event: SeatEvent,
-        data: &Arc<Mutex<SurfaceState>>,
+        _: &(),
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
         if let SeatEvent::Capabilities { capabilities } = event {
             if let wayland_client::WEnum::Value(caps) = capabilities {
                 if caps.contains(Capability::Pointer) {
-                    seat.get_pointer(qh, data.clone());
+                    seat.get_pointer(qh, ());
                 }
             }
         }
     }
 }
 
-impl Dispatch<WlPointer, Arc<Mutex<SurfaceState>>> for ShellState {
+impl Dispatch<WlPointer, ()> for ShellState {
     fn event(
         state: &mut Self,
         _: &WlPointer,
         event: PointerEvent,
-        data: &Arc<Mutex<SurfaceState>>,
+        _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -151,7 +153,7 @@ impl Dispatch<WlPointer, Arc<Mutex<SurfaceState>>> for ShellState {
                     btn_state,
                     wayland_client::WEnum::Value(ButtonState::Pressed)
                 );
-                let surface_h = data.lock().unwrap().height as f32;
+                let surface_h = state.pointer_surface_height;
                 eprintln!(
                     "[bar] button event: button=0x{button:x} press={is_press} pointer_pos={:?}",
                     state.pointer_pos
