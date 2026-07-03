@@ -1,4 +1,4 @@
-pub mod elements;
+pub mod panel;
 pub mod programs;
 
 use khronos_egl as egl;
@@ -7,9 +7,9 @@ use wayland_client::{Connection, Proxy};
 
 use gl::types::*;
 
-use crate::renderer::elements::bar_panel;
-use crate::renderer::programs::rect::RectProgram;
 use crate::display::AppState;
+use crate::renderer::panel::Panel;
+use crate::renderer::programs::rect::RectProgram;
 
 // ==================== RENDERER ====================
 
@@ -20,6 +20,7 @@ pub struct Renderer {
     rect_program: RectProgram,
     #[allow(dead_code)]
     vao: GLuint,
+    panels: Vec<Box<dyn Panel>>,
     _wl_egl_surface: WlEglSurface,
 }
 
@@ -29,6 +30,7 @@ impl Renderer {
         surface: impl wayland_client::Proxy,
         initial_width: i32,
         initial_height: i32,
+        panels: Vec<Box<dyn Panel>>,
     ) -> Self {
         // ---------------- LOAD EGL ----------------
         let lib = unsafe { libloading::Library::new("libEGL.so.1") }
@@ -118,6 +120,7 @@ impl Renderer {
             egl_surface,
             rect_program,
             vao,
+            panels,
             _wl_egl_surface: wl_egl_surface,
         }
     }
@@ -125,26 +128,6 @@ impl Renderer {
     /// Render a single frame using the current AppState.
     /// Must be called with the EGL context current (it is after construction).
     pub fn render_frame(&self, state: &AppState) {
-        let (ws_count, active_slot) = {
-            let bar = state.bar.lock().unwrap();
-            let active_slot = bar
-                .workspaces
-                .iter()
-                .position(|w| w.id == bar.active_id)
-                .map(|i| i as i32)
-                .unwrap_or(-1);
-            (bar.workspaces.len(), active_slot)
-        };
-
-        let hover_slot = state
-            .pointer_pos
-            .and_then(|(px, py)| {
-                let buttons = crate::bar::button_layout(ws_count, state.height as f32);
-                crate::bar::hit_test(&buttons, px as f32, py as f32)
-            })
-            .map(|i| i as i32)
-            .unwrap_or(-1);
-
         unsafe {
             gl::Viewport(0, 0, state.width, state.height);
             gl::ClearColor(0.0, 0.0, 0.0, 0.0);
@@ -156,14 +139,9 @@ impl Renderer {
         let surface_w = state.width as f32;
         let surface_h = state.height as f32;
 
-        bar_panel::draw_bar_panel(
-            &self.rect_program,
-            surface_w,
-            surface_h,
-            ws_count,
-            active_slot,
-            hover_slot,
-        );
+        for panel in &self.panels {
+            panel.draw(&self.rect_program, surface_w, surface_h, state);
+        }
 
         self.egl
             .swap_buffers(self.egl_display, self.egl_surface)

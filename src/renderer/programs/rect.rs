@@ -96,7 +96,7 @@ impl Mat3 {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct RoundedRectStyle {
+pub struct RectStyle {
     pub fill: Color,
     pub border: Color,
     pub fill_mode: FillMode,
@@ -242,7 +242,7 @@ impl RectProgram {
         surface_height: f32,
         width: f32,
         height: f32,
-        style: &RoundedRectStyle,
+        style: &RectStyle,
         transform: Mat3,
     ) {
         if self.program == 0 || width <= 0.0 || height <= 0.0 {

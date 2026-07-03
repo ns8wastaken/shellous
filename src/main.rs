@@ -25,6 +25,8 @@ use crate::bar::BarState;
 use crate::compositor::Compositor;
 use crate::display::AppState;
 use crate::hyprland::HyprlandCompositor;
+use crate::renderer::panel::bar::BarPanel;
+use crate::renderer::panel::Panel;
 use crate::renderer::Renderer;
 
 // ==================== MAIN ====================
@@ -81,7 +83,14 @@ fn main() {
     }
 
     // ---------------- RENDERER ----------------
-    let renderer = Renderer::new(&conn, surface, state.width, state.height);
+    let panels: Vec<Box<dyn Panel>> = vec![Box::new(BarPanel::default())];
+    let renderer = Renderer::new(
+        &conn,
+        surface,
+        state.width,
+        state.height,
+        panels
+    );
 
     // ---------------- RENDER LOOP ----------------
     loop {
