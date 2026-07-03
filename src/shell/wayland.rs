@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use wayland_client::{
-    Connection, Dispatch, QueueHandle,
     globals::GlobalListContents,
     protocol::{
         wl_compositor::WlCompositor,
@@ -10,17 +9,15 @@ use wayland_client::{
         wl_seat::{Capability, Event as SeatEvent, WlSeat},
         wl_surface::WlSurface,
     },
+    Connection, Dispatch, QueueHandle,
 };
-
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
     zwlr_layer_surface_v1::{Event as LayerEvent, ZwlrLayerSurfaceV1},
 };
 
-use crate::layer_surface::SurfaceState;
-use crate::shell_state::ShellState;
-
-// ==================== WAYLAND DISPATCH ====================
+use crate::shell::layer_surface::SurfaceState;
+use crate::shell::state::ShellState;
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for ShellState {
     fn event(
@@ -70,11 +67,9 @@ impl Dispatch<ZwlrLayerShellV1, ()> for ShellState {
     }
 }
 
-// ==================== LAYER SURFACE CONFIGURE ====================
-
 impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
     fn event(
-        _state: &mut Self,
+        _: &mut Self,
         proxy: &ZwlrLayerSurfaceV1,
         event: LayerEvent,
         data: &Arc<Mutex<SurfaceState>>,
@@ -94,8 +89,6 @@ impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
         }
     }
 }
-
-// ==================== SEAT / POINTER ====================
 
 impl Dispatch<WlSeat, ()> for ShellState {
     fn event(
@@ -132,7 +125,6 @@ impl Dispatch<WlPointer, ()> for ShellState {
                 surface,
                 ..
             } => {
-                eprintln!("[shell] pointer enter at ({surface_x:.1}, {surface_y:.1})");
                 state.set_focus_by_surface(&surface);
                 state.pointer_pos = Some((surface_x, surface_y));
             }
@@ -140,11 +132,8 @@ impl Dispatch<WlPointer, ()> for ShellState {
                 surface_x,
                 surface_y,
                 ..
-            } => {
-                state.pointer_pos = Some((surface_x, surface_y));
-            }
+            } => state.pointer_pos = Some((surface_x, surface_y)),
             PointerEvent::Leave { .. } => {
-                eprintln!("[shell] pointer leave");
                 state.focused_surface = None;
                 state.pointer_pos = None;
             }
@@ -154,16 +143,9 @@ impl Dispatch<WlPointer, ()> for ShellState {
                 ..
             } => {
                 const BTN_LEFT: u32 = 0x110;
-                let is_press = matches!(
-                    btn_state,
-                    wayland_client::WEnum::Value(ButtonState::Pressed)
-                );
+                let is_press =
+                    matches!(btn_state, wayland_client::WEnum::Value(ButtonState::Pressed));
                 if button == BTN_LEFT && is_press {
-                    eprintln!(
-                        "[shell] left click at {:?} on surface {:?}",
-                        state.pointer_pos,
-                        state.focused_surface,
-                    );
                     state.handle_click();
                 }
             }

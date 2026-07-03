@@ -1,4 +1,3 @@
-pub mod panel;
 pub mod programs;
 
 use std::sync::Arc;
@@ -6,8 +5,8 @@ use std::sync::Arc;
 use wayland_egl::WlEglSurface;
 use wayland_client::Proxy;
 
-use crate::egl_state::EglState;
-use crate::renderer::panel::{Panel, RenderContext};
+use crate::shell::egl::EglState;
+use crate::ui::RenderContext;
 
 // ==================== RENDERER ====================
 
@@ -86,9 +85,7 @@ impl Renderer {
 
     /// Render a single frame for this surface.
     ///
-    /// `panels` are owned by the `ManagedSurface` so they can be used for
-    /// both drawing and click handling.
-    pub fn render_frame(&self, panels: &[Box<dyn Panel>], ctx: &RenderContext) {
+    pub fn render_frame(&self, ctx: &RenderContext, draw: impl FnOnce()) {
         unsafe {
             gl::Viewport(0, 0, self.width, self.height);
             gl::ClearColor(0.0, 0.0, 0.0, 0.0);
@@ -97,13 +94,16 @@ impl Renderer {
             gl::BindVertexArray(self.egl.vao);
         }
 
-        for panel in panels {
-            panel.draw(&self.egl.rect_program, ctx);
-        }
+        let _ = ctx;
+        draw();
 
         self.egl
             .egl
             .swap_buffers(self.egl.egl_display, self.egl_surface)
             .expect("eglSwapBuffers failed");
+    }
+
+    pub fn rect_program(&self) -> &crate::renderer::programs::rect::RectProgram {
+        &self.egl.rect_program
     }
 }

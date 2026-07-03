@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use crate::bar::{BarState, Workspace};
-use crate::compositor::Compositor;
+use crate::components::bar::{BarState, Workspace};
+use crate::shell::compositor::Compositor;
 
 // ==================== INTERNAL JSON TYPES ====================
 
@@ -51,7 +51,7 @@ impl HyprlandCompositor {
 }
 
 impl Compositor for HyprlandCompositor {
-    fn fetch_workspaces(&self) -> Vec<Workspace> {
+    fn get_workspaces(&self) -> Vec<Workspace> {
         let raw = match self.hypr_command("j/workspaces") {
             Ok(r) => r,
             Err(e) => {
@@ -72,7 +72,7 @@ impl Compositor for HyprlandCompositor {
             .collect()
     }
 
-    fn fetch_active_workspace(&self) -> i32 {
+    fn get_active_workspace(&self) -> i32 {
         let raw = match self.hypr_command("j/activeworkspace") {
             Ok(r) => r,
             Err(e) => {

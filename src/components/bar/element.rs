@@ -1,11 +1,9 @@
-use crate::action::Action;
-use crate::bar;
-use crate::renderer::panel::{Panel, RenderContext};
+use crate::shell::action::Action;
+use crate::components::bar::state;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
 };
-
-// ==================== DRAWING CONSTANTS ====================
+use crate::ui::{Element, RenderContext};
 
 const START_X: f32 = 20.0;
 const SPACING: f32 = 22.0;
@@ -13,19 +11,17 @@ const DOT_R: f32 = 2.5;
 const CAP_R: f32 = 3.5;
 const CAP_HALF: f32 = 5.5;
 
-// ==================== BAR PANEL ====================
-
-pub struct BarPanel {
+pub struct BarElement {
     pub width: f32,
 }
 
-impl Default for BarPanel {
+impl Default for BarElement {
     fn default() -> Self {
         Self { width: 260.0 }
     }
 }
 
-impl Panel for BarPanel {
+impl Element for BarElement {
     fn draw(&self, rect: &RectProgram, ctx: &RenderContext) {
         let (ws_count, active_slot) = {
             let bar = ctx.state.bar.lock().unwrap();
@@ -41,8 +37,8 @@ impl Panel for BarPanel {
         let hover_slot = ctx
             .pointer_pos
             .and_then(|(px, py)| {
-                let buttons = bar::button_layout(ws_count, ctx.surface_h);
-                bar::hit_test(&buttons, px as f32, py as f32)
+                let buttons = state::button_layout(ws_count, ctx.surface_h);
+                state::hit_test(&buttons, px as f32, py as f32)
             })
             .map(|i| i as i32)
             .unwrap_or(-1);
@@ -66,9 +62,9 @@ impl Panel for BarPanel {
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> Action {
         let bar = ctx.state.bar.lock().unwrap();
         let ws_count = bar.workspaces.len();
-        let buttons = bar::button_layout(ws_count, ctx.surface_h);
+        let buttons = state::button_layout(ws_count, ctx.surface_h);
 
-        match bar::hit_test(&buttons, x, y) {
+        match state::hit_test(&buttons, x, y) {
             Some(idx) => {
                 let id = bar.workspaces[idx].id;
                 Action::SwitchWorkspace(id)
@@ -77,8 +73,6 @@ impl Panel for BarPanel {
         }
     }
 }
-
-// ==================== PANEL BACKGROUND ====================
 
 fn draw_background(
     rect: &RectProgram,
@@ -102,8 +96,6 @@ fn draw_background(
     };
     rect.draw(surface_w, surface_h, panel_w, panel_h + 18.0, &style, Mat3::identity());
 }
-
-// ==================== WORKSPACE INDICATORS ====================
 
 fn draw_active_indicator(
     rect: &RectProgram,
@@ -234,8 +226,6 @@ fn draw_workspace_indicators(
         }
     }
 }
-
-// ==================== RIGHT PILL (placeholder) ====================
 
 fn draw_right_pill(rect: &RectProgram, surface_w: f32, surface_h: f32) {
     let right_cx = surface_w - 24.0;

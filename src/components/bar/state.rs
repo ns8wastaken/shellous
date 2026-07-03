@@ -11,8 +11,6 @@ pub struct BarState {
     pub active_id: i32,
 }
 
-// ==================== WORKSPACE INDICATOR LAYOUT ====================
-
 pub struct ButtonRect {
     pub cx: f32,
     pub cy: f32,
