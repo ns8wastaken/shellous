@@ -1,6 +1,6 @@
+use crate::action::Action;
 use crate::bar;
-use crate::shell_state::ShellState;
-use crate::renderer::panel::Panel;
+use crate::renderer::panel::{Panel, RenderContext};
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
 };
@@ -26,9 +26,9 @@ impl Default for BarPanel {
 }
 
 impl Panel for BarPanel {
-    fn draw(&self, rect: &RectProgram, surface_w: f32, surface_h: f32, state: &ShellState) {
+    fn draw(&self, rect: &RectProgram, ctx: &RenderContext) {
         let (ws_count, active_slot) = {
-            let bar = state.bar.lock().unwrap();
+            let bar = ctx.state.bar.lock().unwrap();
             let active_slot = bar
                 .workspaces
                 .iter()
@@ -38,29 +38,43 @@ impl Panel for BarPanel {
             (bar.workspaces.len(), active_slot)
         };
 
-        let hover_slot = state
+        let hover_slot = ctx
             .pointer_pos
             .and_then(|(px, py)| {
-                let buttons = bar::button_layout(ws_count, surface_h);
+                let buttons = bar::button_layout(ws_count, ctx.surface_h);
                 bar::hit_test(&buttons, px as f32, py as f32)
             })
             .map(|i| i as i32)
             .unwrap_or(-1);
 
-        let panel_h = surface_h - 18.0;
+        let panel_h = ctx.surface_h - 18.0;
 
-        draw_background(rect, surface_w, surface_h, panel_h, self.width);
+        draw_background(rect, ctx.surface_w, ctx.surface_h, panel_h, self.width);
         draw_workspace_indicators(
             rect,
-            surface_w,
-            surface_h,
+            ctx.surface_w,
+            ctx.surface_h,
             self.width,
             panel_h,
             ws_count,
             active_slot,
             hover_slot,
         );
-        draw_right_pill(rect, surface_w, surface_h);
+        draw_right_pill(rect, ctx.surface_w, ctx.surface_h);
+    }
+
+    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> Action {
+        let bar = ctx.state.bar.lock().unwrap();
+        let ws_count = bar.workspaces.len();
+        let buttons = bar::button_layout(ws_count, ctx.surface_h);
+
+        match bar::hit_test(&buttons, x, y) {
+            Some(idx) => {
+                let id = bar.workspaces[idx].id;
+                Action::SwitchWorkspace(id)
+            }
+            None => Action::None,
+        }
     }
 }
 

@@ -1,25 +1,25 @@
+mod action;
 mod bar;
 mod compositor;
-mod shell_state;
+mod egl_state;
 mod hyprland;
 mod layer_surface;
+mod managed_surface;
 mod renderer;
+mod shell;
+mod shell_state;
+mod surface_id;
 mod wayland;
 
 use std::sync::{Arc, Mutex};
 
-use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_surface_v1::Anchor,
-};
+use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::Anchor;
 
 use crate::bar::BarState;
 use crate::compositor::Compositor;
-use crate::shell_state::ShellState;
 use crate::hyprland::HyprlandCompositor;
-use crate::layer_surface::{LayerSurface, WaylandState};
 use crate::renderer::panel::bar::BarPanel;
-use crate::renderer::panel::Panel;
-use crate::renderer::Renderer;
+use crate::shell::{Shell, SurfaceConfig};
 
 // ==================== MAIN ====================
 
@@ -34,42 +34,19 @@ fn main() {
     compositor.refresh_bar(&bar_state);
     compositor.clone().spawn_event_listener(bar_state.clone());
 
-    // ---- Wayland connection (shared by all surfaces) ----
-    let mut wl = WaylandState::new();
-
-    let mut state = ShellState {
-        bar: bar_state,
-        compositor,
-        pointer_pos: None,
-        pointer_surface_height: 0.0,
-    };
+    // ---- Shell ----
+    let mut shell = Shell::new(compositor, bar_state);
 
     // ---- Bar surface ----
-    let (bar_surface, surface) = LayerSurface::new(&wl, "shellous:bar");
+    shell.add_surface(SurfaceConfig {
+        namespace: "shellous:bar".into(),
+        anchor: Anchor::Top | Anchor::Left | Anchor::Right,
+        width: 0,
+        height: 36 + 18,
+        exclusive_zone: 36,
+        panels: vec![Box::new(BarPanel::default())],
+    });
 
-    bar_surface.layer_surface.set_anchor(Anchor::Top | Anchor::Left | Anchor::Right);
-    bar_surface.layer_surface.set_size(0, 36 + 18);
-    bar_surface.layer_surface.set_exclusive_zone(36);
-    surface.commit();
-
-    wl.wait_for_configure(&mut state, &bar_surface.surface_state);
-
-    let (bar_w, bar_h) = bar_surface.dimensions();
-
-    // ---- Renderer ----
-    let panels: Vec<Box<dyn Panel>> = vec![Box::new(BarPanel::default())];
-    let renderer = Renderer::new(
-        &wl.conn,
-        surface,
-        bar_w,
-        bar_h,
-        panels,
-    );
-
-    // ---- Render loop ----
-    // TODO: limit fps
-    loop {
-        wl.dispatch(&mut state);
-        renderer.render_frame(&state);
-    }
+    // ---- Render loop (never returns) ----
+    shell.run();
 }

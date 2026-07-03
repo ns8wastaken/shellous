@@ -15,6 +15,7 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 };
 
 use crate::shell_state::ShellState;
+use crate::surface_id::SurfaceId;
 
 // ==================== SURFACE STATE ====================
 
@@ -24,6 +25,9 @@ pub struct SurfaceState {
     pub configured: bool,
     pub width: i32,
     pub height: i32,
+    /// Which managed surface this state belongs to (available for Dispatch routing).
+    #[allow(dead_code)]
+    pub surface_id: SurfaceId,
 }
 
 // ==================== SHARED WAYLAND STATE ====================
@@ -107,8 +111,6 @@ impl WaylandState {
 /// The `WlSurface` is returned separately from `new()` so it can be
 /// moved into the `Renderer` without partially moving `self`.
 pub struct LayerSurface {
-    /// Cloned connection from WaylandState (needed for EGL init in Renderer).
-    pub conn: Connection,
     /// The layer surface proxy — configure anchor, size, margins, etc. on this.
     pub layer_surface: ZwlrLayerSurfaceV1,
     /// Per-surface state (configured, width, height) — populated by the
@@ -133,12 +135,13 @@ impl LayerSurface {
     ///
     /// Returns `(Self, WlSurface)` — the surface is separate so it can be
     /// moved into the `Renderer` without conflict.
-    pub fn new(wl: &WaylandState, namespace: &str) -> (Self, WlSurface) {
+    pub fn new(wl: &WaylandState, namespace: &str, surface_id: SurfaceId) -> (Self, WlSurface) {
         let qh = &wl.qh;
         let surface_state = Arc::new(Mutex::new(SurfaceState {
             configured: false,
             width: 0,
             height: 0,
+            surface_id,
         }));
 
         let surface = wl.wl_compositor.create_surface(qh, ());
@@ -154,7 +157,6 @@ impl LayerSurface {
 
         (
             Self {
-                conn: wl.conn.clone(),
                 layer_surface,
                 surface_state,
             },

@@ -17,7 +17,6 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{Event as LayerEvent, ZwlrLayerSurfaceV1},
 };
 
-use crate::bar::{button_layout, hit_test};
 use crate::layer_surface::SurfaceState;
 use crate::shell_state::ShellState;
 
@@ -71,9 +70,11 @@ impl Dispatch<ZwlrLayerShellV1, ()> for ShellState {
     }
 }
 
+// ==================== LAYER SURFACE CONFIGURE ====================
+
 impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
     fn event(
-        state: &mut Self,
+        _state: &mut Self,
         proxy: &ZwlrLayerSurfaceV1,
         event: LayerEvent,
         data: &Arc<Mutex<SurfaceState>>,
@@ -88,12 +89,13 @@ impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
             }
             if height > 0 {
                 ss.height = height as i32;
-                state.pointer_surface_height = height as f32;
             }
             ss.configured = true;
         }
     }
 }
+
+// ==================== SEAT / POINTER ====================
 
 impl Dispatch<WlSeat, ()> for ShellState {
     fn event(
@@ -127,9 +129,11 @@ impl Dispatch<WlPointer, ()> for ShellState {
             PointerEvent::Enter {
                 surface_x,
                 surface_y,
+                surface,
                 ..
             } => {
-                eprintln!("[bar] pointer enter at ({surface_x:.1}, {surface_y:.1})");
+                eprintln!("[shell] pointer enter at ({surface_x:.1}, {surface_y:.1})");
+                state.set_focus_by_surface(&surface);
                 state.pointer_pos = Some((surface_x, surface_y));
             }
             PointerEvent::Motion {
@@ -140,7 +144,8 @@ impl Dispatch<WlPointer, ()> for ShellState {
                 state.pointer_pos = Some((surface_x, surface_y));
             }
             PointerEvent::Leave { .. } => {
-                eprintln!("[bar] pointer leave");
+                eprintln!("[shell] pointer leave");
+                state.focused_surface = None;
                 state.pointer_pos = None;
             }
             PointerEvent::Button {
@@ -153,32 +158,13 @@ impl Dispatch<WlPointer, ()> for ShellState {
                     btn_state,
                     wayland_client::WEnum::Value(ButtonState::Pressed)
                 );
-                let surface_h = state.pointer_surface_height;
-                eprintln!(
-                    "[bar] button event: button=0x{button:x} press={is_press} pointer_pos={:?}",
-                    state.pointer_pos
-                );
                 if button == BTN_LEFT && is_press {
-                    if let Some((px, py)) = state.pointer_pos {
-                        let bar = state.bar.lock().unwrap();
-                        let buttons = button_layout(bar.workspaces.len(), surface_h);
-                        eprintln!(
-                            "[bar] hit-testing ({px:.1}, {py:.1}) against {} buttons (ws={:?})",
-                            buttons.len(),
-                            bar.workspaces.iter().map(|w| w.id).collect::<Vec<_>>()
-                        );
-                        match hit_test(&buttons, px as f32, py as f32) {
-                            Some(idx) => {
-                                let id = bar.workspaces[idx].id;
-                                drop(bar);
-                                eprintln!("[bar] hit button {idx} -> workspace {id}");
-                                state.compositor.switch_workspace(id);
-                            }
-                            None => eprintln!("[bar] click missed all buttons"),
-                        }
-                    } else {
-                        eprintln!("[bar] click but no pointer_pos recorded");
-                    }
+                    eprintln!(
+                        "[shell] left click at {:?} on surface {:?}",
+                        state.pointer_pos,
+                        state.focused_surface,
+                    );
+                    state.handle_click();
                 }
             }
             _ => {}
