@@ -61,6 +61,14 @@ impl WaylandState {
         self.event_queue.roundtrip(state).unwrap();
     }
 
+    pub fn blocking_dispatch(&mut self, state: &mut ShellState) {
+        self.event_queue.blocking_dispatch(state).unwrap();
+    }
+
+    pub fn qh(&self) -> &QueueHandle<ShellState> {
+        &self.qh
+    }
+
     pub fn wait_for_configure(
         &mut self,
         state: &mut ShellState,

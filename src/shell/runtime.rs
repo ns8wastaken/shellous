@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::Layer,
-    zwlr_layer_surface_v1::Anchor,
+    zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::Anchor,
 };
 
 use crate::components::bar::BarState;
+use crate::renderer::Renderer;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
 use crate::shell::layer_surface::{LayerSurface, WaylandState};
@@ -13,9 +13,8 @@ use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
 use crate::ui::{Element, SurfaceModel, SurfaceRole};
-use crate::renderer::Renderer;
 
-pub struct SurfaceConfig {
+pub struct SurfaceSpec {
     pub namespace: String,
     pub anchor: Anchor,
     pub width: i32,
@@ -37,10 +36,14 @@ impl Shell {
         let wayland = WaylandState::new();
         let state = ShellState::new(bar, compositor);
         let egl = EglState::new(&wayland.conn);
-        Self { wayland, state, egl }
+        Self {
+            wayland,
+            state,
+            egl,
+        }
     }
 
-    pub fn add_surface(&mut self, config: SurfaceConfig) -> SurfaceId {
+    pub fn mount(&mut self, config: SurfaceSpec) -> SurfaceId {
         let id = self.state.next_id;
         self.state.next_id += 1;
 
@@ -48,8 +51,12 @@ impl Shell {
             LayerSurface::new(&self.wayland, &config.namespace, id, config.layer);
 
         layer.layer_surface.set_anchor(config.anchor);
-        layer.layer_surface.set_size(config.width as u32, config.height as u32);
-        layer.layer_surface.set_exclusive_zone(config.exclusive_zone);
+        layer
+            .layer_surface
+            .set_size(config.width as u32, config.height as u32);
+        layer
+            .layer_surface
+            .set_exclusive_zone(config.exclusive_zone);
         wl_surface.commit();
 
         self.state.register(ManagedSurface {
@@ -58,6 +65,8 @@ impl Shell {
             wl_surface,
             renderer: None,
             model: SurfaceModel::new(config.role, config.elements),
+            frame_pending: false,
+            dirty: true,
         });
 
         let surface_state = {
@@ -81,8 +90,26 @@ impl Shell {
 
     pub fn run(&mut self) {
         loop {
-            self.wayland.dispatch(&mut self.state);
+            self.wayland.blocking_dispatch(&mut self.state);
+            let qh = self.wayland.qh().clone();
+
+            let dirty_ids: Vec<SurfaceId> = self.state.surfaces.iter()
+                .filter(|e| e.dirty && e.renderer.is_some())
+                .map(|e| e.id)
+                .collect();
+
+            // Pass 1: queue frame callbacks BEFORE each surface's commit (mutable)
+            for id in &dirty_ids {
+                if let Some(entry) = self.state.find_surface_mut(*id) {
+                    entry.request_frame(&qh);
+                }
+            }
+
+            // Pass 2: render — swap triggers the commit that flushes the queued callback (immutable)
             for entry in &self.state.surfaces {
+                if !dirty_ids.contains(&entry.id) {
+                    continue;
+                }
                 if let Some(ref renderer) = entry.renderer {
                     renderer.make_current();
                     let ctx = entry.render_context(&self.state);
@@ -91,19 +118,13 @@ impl Shell {
                     });
                 }
             }
-        }
-    }
 
-    pub fn add_bar(&mut self, width: i32, height: i32, elements: Vec<Box<dyn Element>>) -> SurfaceId {
-        self.add_surface(SurfaceConfig {
-            namespace: "shellous:bar".into(),
-            anchor: Anchor::Top | Anchor::Left | Anchor::Right,
-            width,
-            height,
-            exclusive_zone: height.saturating_sub(18),
-            layer: Layer::Top,
-            role: SurfaceRole::Bar,
-            elements,
-        })
+            // Pass 3: clear dirty now that it's been rendered (mutable)
+            for id in dirty_ids {
+                if let Some(entry) = self.state.find_surface_mut(id) {
+                    entry.dirty = false;
+                }
+            }
+        }
     }
 }

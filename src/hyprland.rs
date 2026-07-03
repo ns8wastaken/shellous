@@ -109,33 +109,42 @@ impl Compositor for HyprlandCompositor {
     }
 
     fn spawn_event_listener(self: Arc<Self>, bar: Arc<Mutex<BarState>>) {
-        let evt_socket = self.evt_socket.clone();
-        let cmd_socket = self.cmd_socket.clone();
+        // Clone the Arc of self so the thread can own a reference to the compositor
+        let compositor = Arc::clone(&self);
+
         thread::spawn(move || loop {
-            match UnixStream::connect(&evt_socket) {
+            match UnixStream::connect(&compositor.evt_socket) {
                 Ok(stream) => {
                     let reader = BufReader::new(stream);
                     for line in reader.lines() {
                         let Ok(line) = line else { break };
-                        if line.starts_with("workspace")
-                            || line.starts_with("createworkspace")
-                            || line.starts_with("destroyworkspace")
-                            || line.starts_with("moveworkspace")
-                            || line.starts_with("focusedmon")
-                        {
-                            // Build a temporary compositor just for refreshing
-                            let tmp = HyprlandCompositor {
-                                cmd_socket: cmd_socket.clone(),
-                                evt_socket: evt_socket.clone(),
-                            };
-                            tmp.refresh_bar(&bar);
+
+                        // Clean up the event matching logic
+                        let is_target_event = [
+                            "workspace",
+                            "createworkspace",
+                            "destroyworkspace",
+                            "moveworkspace",
+                            "focusedmon",
+                        ]
+                        .iter()
+                        .any(|evt| line.starts_with(evt));
+
+                        if is_target_event {
+                            // Call refresh_bar directly using the cloned Arc
+                            compositor.refresh_bar(&bar);
                         }
                     }
                 }
                 Err(_) => {
+                    // Connection failed: sleep to prevent spinning
                     thread::sleep(Duration::from_secs(1));
                 }
             }
+
+            // Defensive sleep: prevents a tight loop if the connection
+            // succeeds but immediately drops over and over.
+            thread::sleep(Duration::from_millis(100));
         });
     }
 }

@@ -6,7 +6,8 @@ mod ui;
 
 use std::sync::{Arc, Mutex};
 
-use crate::components::bar::{self, BarState};
+use crate::components::bar;
+use crate::components::bar::BarState;
 use crate::hyprland::HyprlandCompositor;
 use crate::shell::compositor::Compositor;
 use crate::shell::runtime::Shell;

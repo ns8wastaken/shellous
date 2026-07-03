@@ -1,22 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use wayland_client::{
-    globals::GlobalListContents,
-    protocol::{
-        wl_compositor::WlCompositor,
-        wl_pointer::{ButtonState, Event as PointerEvent, WlPointer},
-        wl_registry,
-        wl_seat::{Capability, Event as SeatEvent, WlSeat},
-        wl_surface::WlSurface,
-    },
-    Connection, Dispatch, QueueHandle,
+    Connection, Dispatch, QueueHandle, globals::GlobalListContents, protocol::{
+        wl_callback::{self, WlCallback}, wl_compositor::WlCompositor, wl_pointer::{ButtonState, Event as PointerEvent, WlPointer}, wl_registry, wl_seat::{Capability, Event as SeatEvent, WlSeat}, wl_surface::WlSurface
+    }
 };
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
     zwlr_layer_surface_v1::{Event as LayerEvent, ZwlrLayerSurfaceV1},
 };
 
-use crate::shell::layer_surface::SurfaceState;
+use crate::shell::{layer_surface::SurfaceState, surface_id::SurfaceId};
 use crate::shell::state::ShellState;
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for ShellState {
@@ -150,6 +144,17 @@ impl Dispatch<WlPointer, ()> for ShellState {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+impl Dispatch<WlCallback, SurfaceId> for ShellState {
+    fn event(state: &mut Self, _: &WlCallback, event: wl_callback::Event, data: &SurfaceId, _: &Connection, qh: &QueueHandle<Self>) {
+        if let wl_callback::Event::Done { .. } = event {
+            if let Some(surface) = state.find_surface_mut(*data) {
+                surface.frame_pending = false;
+                surface.dirty = true; // ready to draw next tick
+            }
         }
     }
 }
