@@ -2,29 +2,21 @@ mod bar;
 mod compositor;
 mod display;
 mod hyprland;
+mod layer_surface;
 mod renderer;
 mod wayland;
 
-use wayland_client::{
-    Connection,
-    globals::registry_queue_init,
-    protocol::{
-        wl_compositor::WlCompositor,
-        wl_seat::WlSeat,
-    },
-};
+use std::sync::{Arc, Mutex};
 
 use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
     zwlr_layer_surface_v1::Anchor,
 };
-
-use std::sync::{Arc, Mutex};
 
 use crate::bar::BarState;
 use crate::compositor::Compositor;
 use crate::display::AppState;
 use crate::hyprland::HyprlandCompositor;
+use crate::layer_surface::LayerSurface;
 use crate::renderer::panel::bar::BarPanel;
 use crate::renderer::panel::Panel;
 use crate::renderer::Renderer;
@@ -32,7 +24,7 @@ use crate::renderer::Renderer;
 // ==================== MAIN ====================
 
 fn main() {
-    // ---- Compositor backend (shared single instance) ----
+    // ---- Compositor backend ----
     let compositor: Arc<dyn Compositor> = Arc::new(HyprlandCompositor::new());
 
     let bar_state = Arc::new(Mutex::new(BarState {
@@ -42,59 +34,41 @@ fn main() {
     compositor.refresh_bar(&bar_state);
     compositor.clone().spawn_event_listener(bar_state.clone());
 
-    // ---- Wayland display backend ----
-    let conn = Connection::connect_to_env().unwrap();
-    let (globals, mut event_queue) = registry_queue_init::<AppState>(&conn).unwrap();
-    let qh = event_queue.handle();
-
+    // ---- Wayland canvas (layer surface) ----
     let mut state = AppState {
         configured: false,
         width: 1920,
         height: 36,
         pointer_pos: None,
-        bar: bar_state.clone(),
-        compositor: compositor.clone(),
+        bar: bar_state,
+        compositor,
     };
 
-    let wl_compositor = globals
-        .bind::<WlCompositor, _, _>(&qh, 1..=5, ())
-        .expect("wl_compositor not available");
-    let layer_shell = globals
-        .bind::<ZwlrLayerShellV1, _, _>(&qh, 1..=4, ())
-        .expect("zwlr_layer_shell_v1 not available");
-    let seat = globals
-        .bind::<WlSeat, _, _>(&qh, 1..=8, ())
-        .expect("wl_seat not available");
-    let _ = &seat;
+    let (mut canvas, surface) = LayerSurface::new("rust-bar");
 
-    let surface = wl_compositor.create_surface(&qh, ());
-
-    let layer_surface =
-        layer_shell.get_layer_surface(&surface, None, Layer::Top, "rust-bar".into(), &qh, ());
-
-    layer_surface.set_anchor(Anchor::Top | Anchor::Left | Anchor::Right);
-    layer_surface.set_size(0, 36);
-    layer_surface.set_exclusive_zone(36);
-
+    // Configure the canvas: full-width top bar, 36px tall, exclusive zone
+    canvas.layer_surface.set_anchor(Anchor::Top | Anchor::Left | Anchor::Right);
+    canvas.layer_surface.set_size(0, 36);
+    canvas.layer_surface.set_exclusive_zone(36);
     surface.commit();
 
-    while !state.configured {
-        event_queue.blocking_dispatch(&mut state).unwrap();
-    }
+    // Wait for the compositor to respond with the actual dimensions
+    canvas.wait_for_configure(&mut state);
 
-    // ---------------- RENDERER ----------------
+    // ---- Renderer ----
     let panels: Vec<Box<dyn Panel>> = vec![Box::new(BarPanel::default())];
     let renderer = Renderer::new(
-        &conn,
+        &canvas.conn,
         surface,
         state.width,
         state.height,
-        panels
+        panels,
     );
 
-    // ---------------- RENDER LOOP ----------------
+    // ---- Render loop ----
+    // TODO: limit fps
     loop {
-        event_queue.roundtrip(&mut state).unwrap();
+        canvas.dispatch(&mut state);
         renderer.render_frame(&state);
     }
 }

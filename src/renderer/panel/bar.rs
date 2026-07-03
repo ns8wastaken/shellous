@@ -80,7 +80,6 @@ fn draw_background(
         },
         radius: Corners { tl: 0.0, tr: 12.0, br: 12.0, bl: 10.0 },
         logical_inset: LogicalInset { right: 10.0, bottom: 10.0, ..Default::default() },
-        softness: 0.85,
         ..Default::default()
     };
     rect.draw(surface_w, surface_h, panel_w, panel_h, &style, Mat3::identity());
