@@ -1,4 +1,6 @@
 mod bar;
+mod compositor;
+mod display;
 mod hyprland;
 mod renderer;
 mod wayland;
@@ -20,22 +22,25 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 use std::sync::{Arc, Mutex};
 
 use crate::bar::BarState;
-use crate::hyprland::{hypr_sockets, refresh_bar_state, spawn_event_listener};
+use crate::compositor::Compositor;
+use crate::display::AppState;
+use crate::hyprland::HyprlandCompositor;
 use crate::renderer::Renderer;
-use crate::wayland::AppState;
 
 // ==================== MAIN ====================
 
 fn main() {
-    let (cmd_socket, evt_socket) = hypr_sockets();
+    // ---- Compositor backend (shared single instance) ----
+    let compositor: Arc<dyn Compositor> = Arc::new(HyprlandCompositor::new());
 
     let bar_state = Arc::new(Mutex::new(BarState {
         workspaces: Vec::new(),
         active_id: -1,
     }));
-    refresh_bar_state(&cmd_socket, &bar_state);
-    spawn_event_listener(cmd_socket.clone(), evt_socket, bar_state.clone());
+    compositor.refresh_bar(&bar_state);
+    compositor.clone().spawn_event_listener(bar_state.clone());
 
+    // ---- Wayland display backend ----
     let conn = Connection::connect_to_env().unwrap();
     let (globals, mut event_queue) = registry_queue_init::<AppState>(&conn).unwrap();
     let qh = event_queue.handle();
@@ -46,10 +51,10 @@ fn main() {
         height: 36,
         pointer_pos: None,
         bar: bar_state.clone(),
-        cmd_socket: cmd_socket.clone(),
+        compositor: compositor.clone(),
     };
 
-    let compositor = globals
+    let wl_compositor = globals
         .bind::<WlCompositor, _, _>(&qh, 1..=5, ())
         .expect("wl_compositor not available");
     let layer_shell = globals
@@ -58,9 +63,9 @@ fn main() {
     let seat = globals
         .bind::<WlSeat, _, _>(&qh, 1..=8, ())
         .expect("wl_seat not available");
-    let _ = &seat; // capabilities event (handled in Dispatch) requests the pointer
+    let _ = &seat;
 
-    let surface = compositor.create_surface(&qh, ());
+    let surface = wl_compositor.create_surface(&qh, ());
 
     let layer_surface =
         layer_shell.get_layer_surface(&surface, None, Layer::Top, "rust-bar".into(), &qh, ());

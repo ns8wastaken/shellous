@@ -15,21 +15,10 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{Event as LayerEvent, ZwlrLayerSurfaceV1},
 };
 
-use std::sync::{Arc, Mutex};
+use crate::bar::{button_layout, hit_test};
+use crate::display::AppState;
 
-use crate::bar::{button_layout, hit_test, BarState};
-use crate::hyprland::switch_workspace;
-
-// ==================== APP STATE / DISPATCH ====================
-
-pub struct AppState {
-    pub configured: bool,
-    pub width: i32,
-    pub height: i32,
-    pub pointer_pos: Option<(f64, f64)>,
-    pub bar: Arc<Mutex<BarState>>,
-    pub cmd_socket: String,
-}
+// ==================== WAYLAND DISPATCH ====================
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppState {
     fn event(
@@ -172,17 +161,12 @@ impl Dispatch<WlPointer, ()> for AppState {
                             buttons.len(),
                             bar.workspaces.iter().map(|w| w.id).collect::<Vec<_>>()
                         );
-                        // Wayland pointer coords are top-left origin, y-down.
-                        // The shader's `p` space is also top-left/y-down here
-                        // since we sample uv against the same resolution
-                        // without flipping -- if buttons feel offset on your
-                        // compositor, flip py to (height - py).
                         match hit_test(&buttons, px as f32, py as f32) {
                             Some(idx) => {
                                 let id = bar.workspaces[idx].id;
                                 drop(bar);
                                 eprintln!("[bar] hit button {idx} -> workspace {id}");
-                                switch_workspace(&state.cmd_socket, id);
+                                state.compositor.switch_workspace(id);
                             }
                             None => eprintln!("[bar] click missed all buttons"),
                         }

@@ -9,7 +9,7 @@ use gl::types::*;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, Mat3, RoundedRectStyle, RectProgram,
 };
-use crate::wayland::AppState;
+use crate::display::AppState;
 
 // ==================== RENDERER ====================
 
@@ -178,6 +178,11 @@ impl Renderer {
                 tr: 12.0,
                 br: 12.0,
                 bl: 10.0,
+            },
+            logical_inset: programs::rect::LogicalInset {
+                right: 10.0,
+                bottom: 10.0,
+                ..Default::default()
             },
             softness: 0.85,
             ..Default::default()
