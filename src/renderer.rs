@@ -7,7 +7,7 @@ use wayland_client::{Connection, Proxy};
 
 use gl::types::*;
 
-use crate::display::AppState;
+use crate::display::ShellState;
 use crate::renderer::panel::Panel;
 use crate::renderer::programs::rect::RectProgram;
 
@@ -22,6 +22,9 @@ pub struct Renderer {
     vao: GLuint,
     panels: Vec<Box<dyn Panel>>,
     _wl_egl_surface: WlEglSurface,
+    /// This surface's actual dimensions (from SurfaceState after configure).
+    width: i32,
+    height: i32,
 }
 
 impl Renderer {
@@ -122,22 +125,25 @@ impl Renderer {
             vao,
             panels,
             _wl_egl_surface: wl_egl_surface,
+            width: initial_width,
+            height: initial_height,
         }
     }
 
-    /// Render a single frame using the current AppState.
+    /// Render a single frame using the current ShellState.
     /// Must be called with the EGL context current (it is after construction).
-    pub fn render_frame(&self, state: &AppState) {
+    /// Uses the Renderer's own stored dimensions (set from SurfaceState at construction).
+    pub fn render_frame(&self, state: &ShellState) {
         unsafe {
-            gl::Viewport(0, 0, state.width, state.height);
+            gl::Viewport(0, 0, self.width, self.height);
             gl::ClearColor(0.0, 0.0, 0.0, 0.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
             gl::BindVertexArray(self.vao);
         }
 
-        let surface_w = state.width as f32;
-        let surface_h = state.height as f32;
+        let surface_w = self.width as f32;
+        let surface_h = self.height as f32;
 
         for panel in &self.panels {
             panel.draw(&self.rect_program, surface_w, surface_h, state);

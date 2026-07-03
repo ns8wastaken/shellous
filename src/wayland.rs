@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use wayland_client::{
     Connection, Dispatch, QueueHandle,
     globals::GlobalListContents,
@@ -16,11 +18,11 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 };
 
 use crate::bar::{button_layout, hit_test};
-use crate::display::AppState;
+use crate::display::{ShellState, SurfaceState};
 
 // ==================== WAYLAND DISPATCH ====================
 
-impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppState {
+impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for ShellState {
     fn event(
         _: &mut Self,
         _: &wl_registry::WlRegistry,
@@ -32,7 +34,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppState {
     }
 }
 
-impl Dispatch<WlCompositor, ()> for AppState {
+impl Dispatch<WlCompositor, ()> for ShellState {
     fn event(
         _: &mut Self,
         _: &WlCompositor,
@@ -44,7 +46,7 @@ impl Dispatch<WlCompositor, ()> for AppState {
     }
 }
 
-impl Dispatch<WlSurface, ()> for AppState {
+impl Dispatch<WlSurface, ()> for ShellState {
     fn event(
         _: &mut Self,
         _: &WlSurface,
@@ -56,7 +58,7 @@ impl Dispatch<WlSurface, ()> for AppState {
     }
 }
 
-impl Dispatch<ZwlrLayerShellV1, ()> for AppState {
+impl Dispatch<ZwlrLayerShellV1, ()> for ShellState {
     fn event(
         _: &mut Self,
         _: &ZwlrLayerShellV1,
@@ -68,53 +70,54 @@ impl Dispatch<ZwlrLayerShellV1, ()> for AppState {
     }
 }
 
-impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
+impl Dispatch<ZwlrLayerSurfaceV1, Arc<Mutex<SurfaceState>>> for ShellState {
     fn event(
-        state: &mut Self,
+        _state: &mut Self,
         proxy: &ZwlrLayerSurfaceV1,
         event: LayerEvent,
-        _: &(),
+        data: &Arc<Mutex<SurfaceState>>,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
         if let LayerEvent::Configure { serial, width, height } = event {
             proxy.ack_configure(serial);
+            let mut ss = data.lock().unwrap();
             if width > 0 {
-                state.width = width as i32;
+                ss.width = width as i32;
             }
             if height > 0 {
-                state.height = height as i32;
+                ss.height = height as i32;
             }
-            state.configured = true;
+            ss.configured = true;
         }
     }
 }
 
-impl Dispatch<WlSeat, ()> for AppState {
+impl Dispatch<WlSeat, Arc<Mutex<SurfaceState>>> for ShellState {
     fn event(
         _: &mut Self,
         seat: &WlSeat,
         event: SeatEvent,
-        _: &(),
+        data: &Arc<Mutex<SurfaceState>>,
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
         if let SeatEvent::Capabilities { capabilities } = event {
             if let wayland_client::WEnum::Value(caps) = capabilities {
                 if caps.contains(Capability::Pointer) {
-                    seat.get_pointer(qh, ());
+                    seat.get_pointer(qh, data.clone());
                 }
             }
         }
     }
 }
 
-impl Dispatch<WlPointer, ()> for AppState {
+impl Dispatch<WlPointer, Arc<Mutex<SurfaceState>>> for ShellState {
     fn event(
         state: &mut Self,
         _: &WlPointer,
         event: PointerEvent,
-        _: &(),
+        data: &Arc<Mutex<SurfaceState>>,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -148,6 +151,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                     btn_state,
                     wayland_client::WEnum::Value(ButtonState::Pressed)
                 );
+                let surface_h = data.lock().unwrap().height as f32;
                 eprintln!(
                     "[bar] button event: button=0x{button:x} press={is_press} pointer_pos={:?}",
                     state.pointer_pos
@@ -155,7 +159,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                 if button == BTN_LEFT && is_press {
                     if let Some((px, py)) = state.pointer_pos {
                         let bar = state.bar.lock().unwrap();
-                        let buttons = button_layout(bar.workspaces.len(), state.height as f32);
+                        let buttons = button_layout(bar.workspaces.len(), surface_h);
                         eprintln!(
                             "[bar] hit-testing ({px:.1}, {py:.1}) against {} buttons (ws={:?})",
                             buttons.len(),

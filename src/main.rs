@@ -14,7 +14,7 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 
 use crate::bar::BarState;
 use crate::compositor::Compositor;
-use crate::display::AppState;
+use crate::display::{ShellState, SurfaceState};
 use crate::hyprland::HyprlandCompositor;
 use crate::layer_surface::LayerSurface;
 use crate::renderer::panel::bar::BarPanel;
@@ -35,40 +35,48 @@ fn main() {
     compositor.clone().spawn_event_listener(bar_state.clone());
 
     // ---- Wayland canvas (layer surface) ----
-    let mut state = AppState {
-        configured: false,
-        width: 1920,
-        height: 36,
-        pointer_pos: None,
+    let surface_state = Arc::new(Mutex::new(SurfaceState::new(1920, 36)));
+
+    let mut state = ShellState {
         bar: bar_state,
         compositor,
+        pointer_pos: None,
     };
 
-    let (mut canvas, surface) = LayerSurface::new("rust-bar");
+    let (mut bar_surface, surface) = LayerSurface::new(
+        "shellous:bar",
+        surface_state.clone()
+    );
 
-    // Configure the canvas: full-width top bar, 36px tall, exclusive zone
-    canvas.layer_surface.set_anchor(Anchor::Top | Anchor::Left | Anchor::Right);
-    canvas.layer_surface.set_size(0, 36);
-    canvas.layer_surface.set_exclusive_zone(36);
+    // Configure the bar_surface: full-width top bar, 36px tall, exclusive zone
+    bar_surface.layer_surface.set_anchor(Anchor::Top | Anchor::Left | Anchor::Right);
+    bar_surface.layer_surface.set_size(0, 36);
+    bar_surface.layer_surface.set_exclusive_zone(36);
     surface.commit();
 
     // Wait for the compositor to respond with the actual dimensions
-    canvas.wait_for_configure(&mut state);
+    bar_surface.wait_for_configure(&mut state);
+
+    // Read the actual dimensions from SurfaceState (set by the Configure event)
+    let (actual_w, actual_h) = {
+        let ss = surface_state.lock().unwrap();
+        (ss.width, ss.height)
+    };
 
     // ---- Renderer ----
     let panels: Vec<Box<dyn Panel>> = vec![Box::new(BarPanel::default())];
     let renderer = Renderer::new(
-        &canvas.conn,
+        &bar_surface.conn,
         surface,
-        state.width,
-        state.height,
+        actual_w,
+        actual_h,
         panels,
     );
 
     // ---- Render loop ----
     // TODO: limit fps
     loop {
-        canvas.dispatch(&mut state);
+        bar_surface.dispatch(&mut state);
         renderer.render_frame(&state);
     }
 }

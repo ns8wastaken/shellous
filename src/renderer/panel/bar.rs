@@ -1,5 +1,5 @@
 use crate::bar;
-use crate::display::AppState;
+use crate::display::ShellState;
 use crate::renderer::panel::Panel;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
@@ -27,7 +27,7 @@ impl Default for BarPanel {
 }
 
 impl Panel for BarPanel {
-    fn draw(&self, rect: &RectProgram, surface_w: f32, surface_h: f32, state: &AppState) {
+    fn draw(&self, rect: &RectProgram, surface_w: f32, surface_h: f32, state: &ShellState) {
         let (ws_count, active_slot) = {
             let bar = state.bar.lock().unwrap();
             let active_slot = bar
