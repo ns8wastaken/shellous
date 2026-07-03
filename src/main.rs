@@ -54,18 +54,15 @@ fn main() {
 
     wl.wait_for_configure(&mut state, &bar_surface.surface_state);
 
-    let (actual_w, actual_h) = {
-        let ss = bar_surface.surface_state.lock().unwrap();
-        (ss.width, ss.height)
-    };
+    let (bar_w, bar_h) = bar_surface.dimensions();
 
     // ---- Renderer ----
     let panels: Vec<Box<dyn Panel>> = vec![Box::new(BarPanel::default())];
     let renderer = Renderer::new(
         &wl.conn,
         surface,
-        actual_w,
-        actual_h,
+        bar_w,
+        bar_h,
         panels,
     );
 

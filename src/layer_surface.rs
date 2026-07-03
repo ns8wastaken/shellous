@@ -117,6 +117,12 @@ pub struct LayerSurface {
 }
 
 impl LayerSurface {
+    /// Read the compositor's actual dimensions after `wait_for_configure`.
+    pub fn dimensions(&self) -> (i32, i32) {
+        let ss = self.surface_state.lock().unwrap();
+        (ss.width, ss.height)
+    }
+
     /// Create a new layer surface on the shared `WaylandState`.
     ///
     /// The caller must:

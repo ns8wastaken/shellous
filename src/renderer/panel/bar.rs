@@ -12,7 +12,6 @@ const SPACING: f32 = 22.0;
 const DOT_R: f32 = 2.5;
 const CAP_R: f32 = 3.5;
 const CAP_HALF: f32 = 5.5;
-const STROKE_H: f32 = 1.5;
 
 // ==================== BAR PANEL ====================
 
@@ -48,14 +47,19 @@ impl Panel for BarPanel {
             .map(|i| i as i32)
             .unwrap_or(-1);
 
-        let panel_h = surface_h;
+        let panel_h = surface_h - 18.0;
 
         draw_background(rect, surface_w, surface_h, panel_h, self.width);
         draw_workspace_indicators(
-            rect, surface_w, surface_h, self.width,
-            ws_count, active_slot, hover_slot,
+            rect,
+            surface_w,
+            surface_h,
+            self.width,
+            panel_h,
+            ws_count,
+            active_slot,
+            hover_slot,
         );
-        draw_border_stroke(rect, surface_w, surface_h, self.width);
         draw_right_pill(rect, surface_w, surface_h);
     }
 }
@@ -82,7 +86,7 @@ fn draw_background(
         logical_inset: LogicalInset { right: 10.0, bottom: 18.0, ..Default::default() },
         ..Default::default()
     };
-    rect.draw(surface_w, surface_h, panel_w, panel_h, &style, Mat3::identity());
+    rect.draw(surface_w, surface_h, panel_w, panel_h + 18.0, &style, Mat3::identity());
 }
 
 // ==================== WORKSPACE INDICATORS ====================
@@ -91,24 +95,10 @@ fn draw_active_indicator(
     rect: &RectProgram,
     surface_w: f32,
     surface_h: f32,
-    cx: f32,
+    elem_x: f32,
     elem_y: f32,
     hover: bool,
 ) {
-    let w = (CAP_HALF + CAP_R) * 2.0;
-    let h = CAP_R * 2.0;
-    let rx = cx - w * 0.5;
-    let ry = elem_y - h * 0.5;
-
-    let style = RectStyle {
-        fill: Color { r: 0.48, g: 0.62, b: 0.82, a: 1.0 },
-        fill_mode: FillMode::Solid,
-        radius: Corners { tl: CAP_R, tr: CAP_R, br: CAP_R, bl: CAP_R },
-        softness: 0.85,
-        ..Default::default()
-    };
-    rect.draw(surface_w, surface_h, w, h, &style, Mat3::translation(rx, ry));
-
     let iw = (CAP_HALF * 0.6 + CAP_R * 0.6) * 2.0;
     let ih = (CAP_R * 0.6) * 2.0;
     let inner_style = RectStyle {
@@ -119,8 +109,12 @@ fn draw_active_indicator(
         ..Default::default()
     };
     rect.draw(
-        surface_w, surface_h, iw, ih, &inner_style,
-        Mat3::translation(cx - iw * 0.5, elem_y - ih * 0.5),
+        surface_w,
+        surface_h,
+        iw,
+        ih,
+        &inner_style,
+        Mat3::translation(elem_x - iw * 0.5, elem_y - ih * 0.5),
     );
 
     if hover {
@@ -134,8 +128,12 @@ fn draw_active_indicator(
             ..Default::default()
         };
         rect.draw(
-            surface_w, surface_h, gw, gh, &glow_style,
-            Mat3::translation(cx - gw * 0.5, elem_y - gh * 0.5),
+            surface_w,
+            surface_h,
+            gw,
+            gh,
+            &glow_style,
+            Mat3::translation(elem_x - gw * 0.5, elem_y - gh * 0.5),
         );
     }
 }
@@ -144,12 +142,12 @@ fn draw_inactive_indicator(
     rect: &RectProgram,
     surface_w: f32,
     surface_h: f32,
-    cx: f32,
+    elem_x: f32,
     elem_y: f32,
     hover: bool,
 ) {
     let d = DOT_R * 2.0;
-    let rx = cx - DOT_R;
+    let rx = elem_x - DOT_R;
     let ry = elem_y - DOT_R;
 
     let dot_color = if hover {
@@ -178,7 +176,7 @@ fn draw_inactive_indicator(
         };
         rect.draw(
             surface_w, surface_h, gd, gd, &glow_style,
-            Mat3::translation(cx - (DOT_R + 3.0), elem_y - (DOT_R + 3.0)),
+            Mat3::translation(elem_x - (DOT_R + 3.0), elem_y - (DOT_R + 3.0)),
         );
     }
 }
@@ -188,43 +186,39 @@ fn draw_workspace_indicators(
     surface_w: f32,
     surface_h: f32,
     panel_w: f32,
+    panel_h: f32,
     ws_count: usize,
     active_slot: i32,
     hover_slot: i32,
 ) {
-    let elem_y = surface_h * 0.5;
+    let elem_y = panel_h * 0.5;
 
     for i in 0..ws_count.min(20) {
-        let cx = START_X + i as f32 * SPACING;
+        let elem_x = START_X + i as f32 * SPACING;
 
-        if cx + CAP_HALF + CAP_R > panel_w {
+        if elem_x + CAP_HALF + CAP_R > panel_w {
             break;
         }
 
         if i as i32 == active_slot {
-            draw_active_indicator(rect, surface_w, surface_h, cx, elem_y, i as i32 == hover_slot);
+            draw_active_indicator(
+                rect, surface_w,
+                surface_h,
+                elem_x,
+                elem_y,
+                i as i32 == hover_slot
+            );
         } else {
-            draw_inactive_indicator(rect, surface_w, surface_h, cx, elem_y, i as i32 == hover_slot);
+            draw_inactive_indicator(
+                rect,
+                surface_w,
+                surface_h,
+                elem_x,
+                elem_y,
+                i as i32 == hover_slot
+            );
         }
     }
-}
-
-// ==================== BORDER STROKE ====================
-
-fn draw_border_stroke(
-    rect: &RectProgram,
-    surface_w: f32,
-    surface_h: f32,
-    panel_w: f32,
-) {
-    let style = RectStyle {
-        fill: Color { r: 0.50, g: 0.60, b: 0.78, a: 0.55 },
-        fill_mode: FillMode::Solid,
-        radius: Corners { tl: 0.0, tr: 0.0, br: 0.0, bl: 0.0 },
-        softness: 0.5,
-        ..Default::default()
-    };
-    rect.draw(surface_w, surface_h, panel_w, STROKE_H, &style, Mat3::translation(0.0, 0.0));
 }
 
 // ==================== RIGHT PILL (placeholder) ====================
