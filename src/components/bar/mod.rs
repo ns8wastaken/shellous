@@ -2,13 +2,12 @@ mod left;
 mod middle;
 mod state;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::Anchor,
 };
 
-use crate::shell::compositor::Compositor;
 use crate::shell::runtime::{Shell, SurfaceSpec};
 use crate::ui::SurfaceRole;
 
@@ -32,8 +31,10 @@ pub fn surface() -> SurfaceSpec {
     }
 }
 
-pub fn install(shell: &mut Shell, compositor: Arc<dyn Compositor>, state: Arc<Mutex<BarState>>) {
+pub fn mount(shell: &mut Shell) {
+    let state = Arc::clone(shell.bar_state());
+    let compositor = Arc::clone(shell.compositor());
     compositor.refresh_bar(&state);
-    compositor.clone().spawn_event_listener(state.clone());
+    compositor.spawn_event_listener(state);
     shell.mount(surface());
 }

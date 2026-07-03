@@ -32,15 +32,23 @@ pub struct Shell {
 }
 
 impl Shell {
-    pub fn new(compositor: Arc<dyn Compositor>, bar: Arc<Mutex<BarState>>) -> Self {
+    pub fn new(compositor: Arc<dyn Compositor>) -> Self {
         let wayland = WaylandState::new();
-        let state = ShellState::new(bar, compositor);
+        let state = ShellState::new(compositor);
         let egl = EglState::new(&wayland.conn);
         Self {
             wayland,
             state,
             egl,
         }
+    }
+
+    pub fn compositor(&self) -> &Arc<dyn Compositor> {
+        &self.state.compositor
+    }
+
+    pub fn bar_state(&self) -> &Arc<Mutex<BarState>> {
+        &self.state.bar
     }
 
     pub fn mount(&mut self, config: SurfaceSpec) -> SurfaceId {
@@ -90,7 +98,7 @@ impl Shell {
 
     pub fn run(&mut self) {
         loop {
-            self.wayland.blocking_dispatch(&mut self.state);
+            self.wayland.dispatch(&mut self.state);
             let qh = self.wayland.qh().clone();
 
             let dirty_ids: Vec<SurfaceId> = self.state.surfaces.iter()

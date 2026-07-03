@@ -17,9 +17,12 @@ pub struct ShellState {
 }
 
 impl ShellState {
-    pub fn new(bar: Arc<Mutex<BarState>>, compositor: Arc<dyn Compositor>) -> Self {
+    pub fn new(compositor: Arc<dyn Compositor>) -> Self {
         Self {
-            bar,
+            bar: Arc::new(Mutex::new(BarState {
+                workspaces: Vec::new(),
+                active_id: -1,
+            })),
             compositor,
             surfaces: Vec::new(),
             focused_surface: None,
