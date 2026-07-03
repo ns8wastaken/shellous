@@ -1,8 +1,6 @@
 mod bar;
-mod bar_shader;
 mod hyprland;
 mod renderer;
-mod shader;
 mod wayland;
 
 use wayland_client::{

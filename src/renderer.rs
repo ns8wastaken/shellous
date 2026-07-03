@@ -1,60 +1,15 @@
+pub mod programs;
+
 use khronos_egl as egl;
 use wayland_egl::WlEglSurface;
 use wayland_client::{Connection, Proxy};
 
 use gl::types::*;
 
-use std::ffi::CString;
-use std::ptr;
-
-use crate::bar_shader;
-use crate::shader;
+use crate::renderer::programs::rect::{
+    Color, CornerShape, Corners, FillMode, Mat3, RoundedRectStyle, RectProgram,
+};
 use crate::wayland::AppState;
-
-
-// ==================== OPENGL HELPERS ====================
-
-unsafe fn compile_shader(src: &str, ty: GLenum) -> GLuint {
-    unsafe {
-        let shader = gl::CreateShader(ty);
-        let c_str = CString::new(src).unwrap();
-        gl::ShaderSource(shader, 1, &c_str.as_ptr(), ptr::null());
-        gl::CompileShader(shader);
-
-        let mut success: GLint = 0;
-        gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
-        if success == 0 {
-            let mut len: GLint = 0;
-            gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = vec![0u8; len as usize];
-            gl::GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-            panic!("shader compile error: {}", String::from_utf8_lossy(&buf));
-        }
-
-        shader
-    }
-}
-
-unsafe fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
-    unsafe {
-        let program = gl::CreateProgram();
-        gl::AttachShader(program, vs);
-        gl::AttachShader(program, fs);
-        gl::LinkProgram(program);
-
-        let mut success: GLint = 0;
-        gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
-        if success == 0 {
-            let mut len: GLint = 0;
-            gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = vec![0u8; len as usize];
-            gl::GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-            panic!("program link error: {}", String::from_utf8_lossy(&buf));
-        }
-
-        program
-    }
-}
 
 // ==================== RENDERER ====================
 
@@ -62,14 +17,9 @@ pub struct Renderer {
     egl: egl::DynamicInstance<egl::EGL1_4>,
     egl_display: egl::Display,
     egl_surface: egl::Surface,
-    program: GLuint,
-    vao: GLuint,
+    rect_program: RectProgram,
     #[allow(dead_code)]
-    vbo: GLuint,
-    res_loc: GLint,
-    count_loc: GLint,
-    active_loc: GLint,
-    hover_loc: GLint,
+    vao: GLuint,
     _wl_egl_surface: WlEglSurface,
 }
 
@@ -89,13 +39,13 @@ impl Renderer {
         let display_ptr = conn.display().id().as_ptr() as *mut std::ffi::c_void;
         let egl_display = unsafe { egl.get_display(display_ptr) }.expect("eglGetDisplay failed");
         egl.initialize(egl_display).expect("eglInitialize failed");
-        egl.bind_api(egl::OPENGL_API).expect("eglBindAPI failed");
+        egl.bind_api(egl::OPENGL_ES_API).expect("eglBindAPI failed");
 
         let config_attribs = [
             egl::SURFACE_TYPE,
             egl::WINDOW_BIT,
             egl::RENDERABLE_TYPE,
-            egl::OPENGL_BIT,
+            egl::OPENGL_ES_BIT,
             egl::RED_SIZE,
             8,
             egl::GREEN_SIZE,
@@ -115,9 +65,7 @@ impl Renderer {
             egl::CONTEXT_MAJOR_VERSION,
             3,
             egl::CONTEXT_MINOR_VERSION,
-            3,
-            egl::CONTEXT_OPENGL_PROFILE_MASK,
-            egl::CONTEXT_OPENGL_CORE_PROFILE_BIT,
+            0,
             egl::NONE,
         ];
         let egl_context = egl
@@ -148,67 +96,28 @@ impl Renderer {
         // Pace the render loop to vblank instead of busy-looping.
         let _ = egl.swap_interval(egl_display, 1);
 
-        // ---------------- LOAD OPENGL ----------------
+        // ---------------- LOAD OPENGL ES ----------------
         gl::load_with(|s| egl.get_proc_address(s).unwrap() as *const _);
 
-        // ---------------- COMPILE SHADERS ----------------
-        let vs = unsafe { compile_shader(shader::VERT_SRC, gl::VERTEX_SHADER) };
-        let fs = unsafe { compile_shader(bar_shader::BAR_FRAG_SRC, gl::FRAGMENT_SHADER) };
-        let program = unsafe { link_program(vs, fs) };
-        unsafe {
-            gl::DeleteShader(vs);
-            gl::DeleteShader(fs);
-        }
+        // ---------------- CREATE RECT PROGRAM ----------------
+        let rect_program = RectProgram::new();
 
-        // ---------------- SETUP GEOMETRY ----------------
-        let vertices: [f32; 12] = [
-            -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0,
-        ];
-
+        // ---------------- SETUP VAO ----------------
         let mut vao: GLuint = 0;
-        let mut vbo: GLuint = 0;
         unsafe {
             gl::GenVertexArrays(1, &mut vao);
-            gl::GenBuffers(1, &mut vbo);
             gl::BindVertexArray(vao);
-            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl::BufferData(
-                gl::ARRAY_BUFFER,
-                (vertices.len() * std::mem::size_of::<f32>()) as GLsizeiptr,
-                vertices.as_ptr() as *const _,
-                gl::STATIC_DRAW,
-            );
-            gl::VertexAttribPointer(
-                0,
-                2,
-                gl::FLOAT,
-                gl::FALSE,
-                2 * std::mem::size_of::<f32>() as GLsizei,
-                ptr::null(),
-            );
-            gl::EnableVertexAttribArray(0);
 
             gl::Enable(gl::BLEND);
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
         }
 
-        // ---------------- UNIFORM LOCATIONS ----------------
-        let res_loc = unsafe { gl::GetUniformLocation(program, b"resolution\0".as_ptr() as _) };
-        let count_loc = unsafe { gl::GetUniformLocation(program, b"ws_count\0".as_ptr() as _) };
-        let active_loc = unsafe { gl::GetUniformLocation(program, b"active_slot\0".as_ptr() as _) };
-        let hover_loc = unsafe { gl::GetUniformLocation(program, b"hover_slot\0".as_ptr() as _) };
-
         Self {
             egl,
             egl_display,
             egl_surface,
-            program,
+            rect_program,
             vao,
-            vbo,
-            res_loc,
-            count_loc,
-            active_loc,
-            hover_loc,
             _wl_egl_surface: wl_egl_surface,
         }
     }
@@ -241,15 +150,336 @@ impl Renderer {
             gl::ClearColor(0.0, 0.0, 0.0, 0.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
-            gl::UseProgram(self.program);
-            gl::Uniform2f(self.res_loc, state.width as f32, state.height as f32);
-            gl::Uniform1i(self.count_loc, ws_count.min(16) as i32);
-            gl::Uniform1i(self.active_loc, active_slot);
-            gl::Uniform1i(self.hover_loc, hover_slot);
-
             gl::BindVertexArray(self.vao);
-            gl::DrawArrays(gl::TRIANGLES, 0, 6);
         }
+
+        let surface_w = state.width as f32;
+        let surface_h = state.height as f32;
+        let panel_w = 260.0;
+        let panel_h = surface_h;
+
+        // ==================== PANEL BACKGROUND ====================
+        let panel_style = RoundedRectStyle {
+            fill: Color {
+                r: 0.085,
+                g: 0.095,
+                b: 0.110,
+                a: 1.0,
+            },
+            fill_mode: FillMode::Solid,
+            corners: Corners {
+                tl: CornerShape::Convex,
+                tr: CornerShape::Concave,
+                br: CornerShape::Convex,
+                bl: CornerShape::Concave,
+            },
+            radius: Corners {
+                tl: 0.0,
+                tr: 12.0,
+                br: 12.0,
+                bl: 10.0,
+            },
+            softness: 0.85,
+            ..Default::default()
+        };
+
+        self.rect_program.draw(
+            surface_w,
+            surface_h,
+            panel_w,
+            panel_h,
+            &panel_style,
+            Mat3::identity(),
+        );
+
+        // ==================== WORKSPACE INDICATORS ====================
+        let start_x = 20.0;
+        let spacing = 22.0;
+        let dot_r = 2.5;
+        let cap_r = 3.5;
+        let cap_half = 5.5;
+        let elem_y = surface_h * 0.5;
+
+        for i in 0..ws_count.min(20) {
+            let cx = start_x + i as f32 * spacing;
+
+            // Stop if this element would extend past the panel edge
+            if cx + cap_half + cap_r > panel_w {
+                break;
+            }
+
+            if i as i32 == active_slot {
+                // ---- Active: elongated capsule (rounded rect) ----
+                let w = (cap_half + cap_r) * 2.0;
+                let h = cap_r * 2.0;
+                let rx = cx - w * 0.5;
+                let ry = elem_y - h * 0.5;
+
+                let active_style = RoundedRectStyle {
+                    fill: Color {
+                        r: 0.48,
+                        g: 0.62,
+                        b: 0.82,
+                        a: 1.0,
+                    },
+                    fill_mode: FillMode::Solid,
+                    radius: Corners {
+                        tl: cap_r,
+                        tr: cap_r,
+                        br: cap_r,
+                        bl: cap_r,
+                    },
+                    softness: 0.85,
+                    ..Default::default()
+                };
+
+                self.rect_program.draw(
+                    surface_w,
+                    surface_h,
+                    w,
+                    h,
+                    &active_style,
+                    Mat3::translation(rx, ry),
+                );
+
+                // Inner highlight
+                let inner_w = (cap_half * 0.6 + cap_r * 0.6) * 2.0;
+                let inner_h = (cap_r * 0.6) * 2.0;
+                let inner_rx = cx - inner_w * 0.5;
+                let inner_ry = elem_y - inner_h * 0.5;
+
+                let inner_style = RoundedRectStyle {
+                    fill: Color {
+                        r: 0.10,
+                        g: 0.12,
+                        b: 0.14,
+                        a: 0.5,
+                    },
+                    fill_mode: FillMode::Solid,
+                    radius: Corners {
+                        tl: cap_r * 0.6,
+                        tr: cap_r * 0.6,
+                        br: cap_r * 0.6,
+                        bl: cap_r * 0.6,
+                    },
+                    softness: 0.85,
+                    ..Default::default()
+                };
+
+                self.rect_program.draw(
+                    surface_w,
+                    surface_h,
+                    inner_w,
+                    inner_h,
+                    &inner_style,
+                    Mat3::translation(inner_rx, inner_ry),
+                );
+
+                // Hover glow (semi-transparent larger capsule behind)
+                if i as i32 == hover_slot {
+                    let glow_w = (cap_half + cap_r + 3.0) * 2.0;
+                    let glow_h = (cap_r + 3.0) * 2.0;
+                    let glow_rx = cx - glow_w * 0.5;
+                    let glow_ry = elem_y - glow_h * 0.5;
+
+                    let glow_style = RoundedRectStyle {
+                        fill: Color {
+                            r: 0.55,
+                            g: 0.70,
+                            b: 0.90,
+                            a: 0.12,
+                        },
+                        fill_mode: FillMode::Solid,
+                        radius: Corners {
+                            tl: cap_r + 3.0,
+                            tr: cap_r + 3.0,
+                            br: cap_r + 3.0,
+                            bl: cap_r + 3.0,
+                        },
+                        softness: 1.5,
+                        ..Default::default()
+                    };
+
+                    self.rect_program.draw(
+                        surface_w,
+                        surface_h,
+                        glow_w,
+                        glow_h,
+                        &glow_style,
+                        Mat3::translation(glow_rx, glow_ry),
+                    );
+                }
+            } else {
+                // ---- Inactive: small circle (small rounded rect) ----
+                let d = dot_r * 2.0;
+                let rx = cx - dot_r;
+                let ry = elem_y - dot_r;
+
+                let dot_color = if i as i32 == hover_slot {
+                    Color {
+                        r: 0.35,
+                        g: 0.40,
+                        b: 0.50,
+                        a: 1.0,
+                    }
+                } else {
+                    Color {
+                        r: 0.25,
+                        g: 0.28,
+                        b: 0.35,
+                        a: 1.0,
+                    }
+                };
+
+                let dot_style = RoundedRectStyle {
+                    fill: dot_color,
+                    fill_mode: FillMode::Solid,
+                    radius: Corners {
+                        tl: dot_r,
+                        tr: dot_r,
+                        br: dot_r,
+                        bl: dot_r,
+                    },
+                    softness: 0.85,
+                    ..Default::default()
+                };
+
+                self.rect_program.draw(
+                    surface_w,
+                    surface_h,
+                    d,
+                    d,
+                    &dot_style,
+                    Mat3::translation(rx, ry),
+                );
+
+                // Hover glow
+                if i as i32 == hover_slot {
+                    let glow_d = (dot_r + 3.0) * 2.0;
+                    let glow_rx = cx - (dot_r + 3.0);
+                    let glow_ry = elem_y - (dot_r + 3.0);
+
+                    let glow_style = RoundedRectStyle {
+                        fill: Color {
+                            r: 0.40,
+                            g: 0.50,
+                            b: 0.65,
+                            a: 0.10,
+                        },
+                        fill_mode: FillMode::Solid,
+                        radius: Corners {
+                            tl: dot_r + 3.0,
+                            tr: dot_r + 3.0,
+                            br: dot_r + 3.0,
+                            bl: dot_r + 3.0,
+                        },
+                        softness: 1.5,
+                        ..Default::default()
+                    };
+
+                    self.rect_program.draw(
+                        surface_w,
+                        surface_h,
+                        glow_d,
+                        glow_d,
+                        &glow_style,
+                        Mat3::translation(glow_rx, glow_ry),
+                    );
+                }
+            }
+        }
+
+        // ==================== BORDER STROKE ====================
+        // Thin light-blue inner stroke along the bottom edge of the panel.
+        let stroke_h = 1.5;
+        let stroke_style = RoundedRectStyle {
+            fill: Color {
+                r: 0.50,
+                g: 0.60,
+                b: 0.78,
+                a: 0.55,
+            },
+            fill_mode: FillMode::Solid,
+            radius: Corners {
+                tl: 0.0,
+                tr: 0.0,
+                br: 0.0,
+                bl: 0.0,
+            },
+            softness: 0.5,
+            ..Default::default()
+        };
+
+        self.rect_program.draw(
+            surface_w,
+            surface_h,
+            panel_w,
+            stroke_h,
+            &stroke_style,
+            Mat3::translation(0.0, 0.0), // flush with bottom of panel
+        );
+
+        // ==================== RIGHT COMPONENT (placeholder) ====================
+        let right_cx = surface_w - 24.0;
+        let right_w = 16.0;
+        let right_h = 16.0; // capsule height = 2 * 8.0
+
+        // Background capsule
+        let right_style = RoundedRectStyle {
+            fill: Color {
+                r: 0.085,
+                g: 0.095,
+                b: 0.110,
+                a: 1.0,
+            },
+            fill_mode: FillMode::Solid,
+            radius: Corners {
+                tl: 8.0,
+                tr: 8.0,
+                br: 8.0,
+                bl: 8.0,
+            },
+            softness: 0.85,
+            ..Default::default()
+        };
+
+        self.rect_program.draw(
+            surface_w,
+            surface_h,
+            right_w * 2.0,
+            right_h,
+            &right_style,
+            Mat3::translation(right_cx - right_w, elem_y - right_h * 0.5),
+        );
+
+        // Small dot inside
+        let dot_d = 3.0 * 2.0;
+        let dot_style = RoundedRectStyle {
+            fill: Color {
+                r: 0.30,
+                g: 0.32,
+                b: 0.40,
+                a: 1.0,
+            },
+            fill_mode: FillMode::Solid,
+            radius: Corners {
+                tl: 3.0,
+                tr: 3.0,
+                br: 3.0,
+                bl: 3.0,
+            },
+            softness: 0.85,
+            ..Default::default()
+        };
+
+        self.rect_program.draw(
+            surface_w,
+            surface_h,
+            dot_d,
+            dot_d,
+            &dot_style,
+            Mat3::translation(right_cx - 3.0, elem_y - 3.0),
+        );
 
         self.egl
             .swap_buffers(self.egl_display, self.egl_surface)
