@@ -12,31 +12,11 @@ const WORKSPACE_SPACING: f32 = 8.0;
 const WORKSPACE_R: f32 = 5.5;
 const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
 const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
+const BAR_HEIGHT: f32 = 30.0 + 18.0;
 const PANEL_OFFSET_Y: f32 = 18.0;
-
-// ==================== PANEL LAYOUT ====================
-
-struct PanelLayout {
-    panel_h: f32,
-    start_x: f32,
-    end_pad: f32,
-}
-
-impl PanelLayout {
-    fn from_surface(surface_h: f32) -> Self {
-        let panel_h = surface_h - PANEL_OFFSET_Y;
-        let rounding = panel_h * 0.5;
-        Self {
-            panel_h,
-            start_x: rounding,
-            end_pad: rounding * 2.0,
-        }
-    }
-}
-
-fn indicator_row_y(surface_h: f32) -> f32 {
-    (surface_h - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R
-}
+const ROUNDING: f32 = (BAR_HEIGHT - PANEL_OFFSET_Y) * 0.5;
+const START_X: f32 = ROUNDING;
+const DOT_ROW_Y: f32 = (BAR_HEIGHT - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R;
 
 // ==================== WORKSPACE DOT ====================
 
@@ -126,6 +106,7 @@ impl Element for WorkspaceDot {
 pub struct LeftPanel {
     handle: WorkspaceHandle,
     row: Row,
+    panel_width: Animated<f32>,
     prev_workspace_ids: Vec<i32>,
 }
 
@@ -143,12 +124,27 @@ impl LeftPanel {
                 handle.clone(),
             )));
         }
+        let panel_w = row_size_at_time(&row, 0.0) + ROUNDING * 3.0;
         Self {
             handle,
             row,
+            panel_width: Animated::new(panel_w)
+                .with_duration(0.26)
+                .with_easing(Easing::EaseOutCubic),
             prev_workspace_ids: ids,
         }
     }
+}
+
+fn row_size_at_time(row: &Row, absolute_time: f32) -> f32 {
+    let mut w = 0.0;
+    for (i, c) in row.children.iter().enumerate() {
+        w += c.size(absolute_time).0;
+        if i + 1 < row.children.len() {
+            w += WORKSPACE_SPACING;
+        }
+    }
+    w
 }
 
 impl Element for LeftPanel {
@@ -180,25 +176,27 @@ impl Element for LeftPanel {
             self.prev_workspace_ids = cur_ids;
         }
 
-        self.row.tick_animations(absolute_time)
+        let row_animating = self.row.tick_animations(absolute_time);
+
+        let target = row_size_at_time(&self.row, absolute_time) + ROUNDING * 3.0;
+        self.panel_width.set_target(target, absolute_time);
+
+        row_animating || !self.panel_width.is_idle(absolute_time)
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let layout = PanelLayout::from_surface(ctx.surface_h);
-        let y = indicator_row_y(ctx.surface_h);
-        let row_w = self.row.size(ctx.absolute_time).0;
-        let panel_w = row_w + layout.start_x + layout.end_pad;
+        let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
+        let panel_w = self.panel_width.value(ctx.absolute_time);
 
-        draw_background(surface, ctx.surface_w, ctx.surface_h, layout.panel_h, panel_w);
+        draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, panel_w);
 
-        let tc = TranslatedCanvas::new(surface, layout.start_x, y);
+        let tc = TranslatedCanvas::new(surface, START_X, DOT_ROW_Y);
         self.row.draw(&tc, ctx);
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let layout = PanelLayout::from_surface(ctx.surface_h);
-        let dot_y = indicator_row_y(ctx.surface_h);
-        self.row.on_click(x - layout.start_x, y - dot_y, ctx)
+        let dot_y = (ctx.surface_h - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R;
+        self.row.on_click(x - START_X, y - dot_y, ctx)
     }
 }
 
