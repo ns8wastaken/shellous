@@ -27,6 +27,28 @@ struct ActiveWorkspace {
     id: i32,
 }
 
+#[derive(Debug, Deserialize)]
+struct HyprOptionInt {
+    #[allow(dead_code)]
+    option: String,
+    int: i32,
+}
+
+/// Queries a Hyprland integer option via `j/getoption <name>`.
+/// Returns `None` if the env vars, socket, or JSON parse fails.
+pub fn get_option_int(name: &str) -> Option<i32> {
+    let sig = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
+    let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
+    let socket = format!("{runtime}/hypr/{sig}/.socket.sock");
+    let cmd = format!("j/getoption {name}\0");
+    let mut stream = UnixStream::connect(&socket).ok()?;
+    stream.write_all(cmd.as_bytes()).ok()?;
+    stream.shutdown(std::net::Shutdown::Write).ok()?;
+    let mut resp = String::new();
+    stream.read_to_string(&mut resp).ok()?;
+    serde_json::from_str::<HyprOptionInt>(&resp).ok().map(|o| o.int)
+}
+
 // ==================== HYPRLAND COMPOSITOR ====================
 
 struct ListenerIncarnation {

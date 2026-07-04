@@ -12,11 +12,6 @@ const WORKSPACE_SPACING: f32 = 8.0;
 const WORKSPACE_R: f32 = 5.5;
 const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
 const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
-const BAR_HEIGHT: f32 = 30.0 + 18.0;
-const PANEL_OFFSET_Y: f32 = 18.0;
-const ROUNDING: f32 = (BAR_HEIGHT - PANEL_OFFSET_Y) * 0.5;
-const START_X: f32 = ROUNDING;
-const DOT_ROW_Y: f32 = (BAR_HEIGHT - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R;
 
 // ==================== WORKSPACE DOT ====================
 
@@ -107,11 +102,14 @@ pub struct LeftPanel {
     handle: WorkspaceHandle,
     row: Row,
     panel_width: Animated<f32>,
+    stored_padding: f32,
+    bottom_offset: f32,
     prev_workspace_ids: Vec<i32>,
+    row_padding: (f32, f32), // (left, top)
 }
 
 impl LeftPanel {
-    pub fn new(handle: WorkspaceHandle) -> Self {
+    pub fn new(handle: WorkspaceHandle, bottom_offset: f32) -> Self {
         let snap = handle.snapshot();
         let mut ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
         ids.sort_unstable();
@@ -124,14 +122,24 @@ impl LeftPanel {
                 handle.clone(),
             )));
         }
-        let panel_w = row_size_at_time(&row, 0.0) + ROUNDING * 3.0;
+        let panel_w = row_size_at_time(&row, 0.0) + bottom_offset * 3.0;
+
+        // surface height is 30 + bottom_offset (from bar/mod.rs),
+        // so panel_h = (30 + bottom_offset) - bottom_offset = 30 always.
+        let panel_h = 30.0;
+        let left = panel_h * 0.5;
+        let top = panel_h * 0.5 - WORKSPACE_R;
+
         Self {
             handle,
             row,
             panel_width: Animated::new(panel_w)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
+            stored_padding: bottom_offset * 2.5,
+            bottom_offset,
             prev_workspace_ids: ids,
+            row_padding: (left, top),
         }
     }
 }
@@ -178,25 +186,24 @@ impl Element for LeftPanel {
 
         let row_animating = self.row.tick_animations(absolute_time);
 
-        let target = row_size_at_time(&self.row, absolute_time) + ROUNDING * 3.0;
+        let target = row_size_at_time(&self.row, absolute_time) + self.stored_padding;
         self.panel_width.set_target(target, absolute_time);
 
         row_animating || !self.panel_width.is_idle(absolute_time)
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
+        let panel_h = ctx.surface_h - self.bottom_offset;
         let panel_w = self.panel_width.value(ctx.absolute_time);
 
-        draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, panel_w);
+        draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, panel_w, self.bottom_offset);
 
-        let tc = TranslatedCanvas::new(surface, START_X, DOT_ROW_Y);
+        let tc = TranslatedCanvas::new(surface, self.row_padding.0, self.row_padding.1);
         self.row.draw(&tc, ctx);
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let dot_y = (ctx.surface_h - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R;
-        self.row.on_click(x - START_X, y - dot_y, ctx)
+        self.row.on_click(x - self.row_padding.0, y - self.row_padding.1, ctx)
     }
 }
 
@@ -208,8 +215,9 @@ fn draw_background(
     surface_h: f32,
     panel_h: f32,
     panel_w: f32,
+    bottom_offset: f32,
 ) {
-    let r = panel_h * 0.5;
+    let rounding = panel_h * 0.5;
     let style = RectStyle {
         fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
         fill_mode: FillMode::Solid,
@@ -219,15 +227,15 @@ fn draw_background(
             br: CornerShape::Convex,
             bl: CornerShape::Concave,
         },
-        radius: Corners { tl: 0.0, tr: r, br: r, bl: 18.0 },
-        logical_inset: LogicalInset { right: r, bottom: 18.0, ..Default::default() },
+        radius: Corners { tl: 0.0, tr: rounding, br: rounding, bl: bottom_offset },
+        logical_inset: LogicalInset { right: rounding, bottom: bottom_offset, ..Default::default() },
         ..Default::default()
     };
     surface.draw_rect(
         surface_w,
         surface_h,
         panel_w,
-        panel_h + 18.0,
+        surface_h,
         &style,
         Mat3::identity(),
     );
