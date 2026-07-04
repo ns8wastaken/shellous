@@ -31,7 +31,7 @@ pub trait Element {
         None
     }
 
-    fn size(&self) -> (f32, f32) {
+    fn size(&self, _absolute_time: f32) -> (f32, f32) {
         (0.0, 0.0)
     }
 }

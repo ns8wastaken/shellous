@@ -21,7 +21,6 @@ impl Lerp for f32 {
 /// let the elapsed time drive the interpolation.
 #[derive(Clone)]
 pub struct Animated<T: Lerp + Copy> {
-    current: T,
     target: T,
     start_value: T,
     start_time: f32,
@@ -32,7 +31,6 @@ pub struct Animated<T: Lerp + Copy> {
 impl<T: Lerp + Copy + PartialEq> Animated<T> {
     pub fn new(value: T) -> Self {
         Self {
-            current: value,
             target: value,
             start_value: value,
             start_time: 0.0,
@@ -51,16 +49,19 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
         self
     }
 
+    pub fn with_target(mut self, target: T) -> Self {
+        self.target = target;
+        self
+    }
+
     pub fn set_target(&mut self, target: T, now: f32) {
         let from = self.value(now);
         if from == target {
-            self.current = target;
             self.target = target;
             self.start_value = target;
             self.start_time = now;
             return;
         }
-        self.current = from;
         self.start_value = from;
         self.target = target;
         self.start_time = now;

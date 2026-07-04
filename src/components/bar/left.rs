@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
 use crate::components::row::Row;
 use crate::components::ui::{Element, RenderContext};
@@ -47,7 +45,6 @@ struct WorkspaceDot {
     handle: WorkspaceHandle,
     is_active: bool,
     width: Animated<f32>,
-    current_width: Cell<f32>,
 }
 
 impl WorkspaceDot {
@@ -60,7 +57,6 @@ impl WorkspaceDot {
             width: Animated::new(initial)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
-            current_width: Cell::new(initial),
         }
     }
 }
@@ -75,8 +71,6 @@ impl Element for WorkspaceDot {
             self.width.set_target(target, absolute_time);
         }
 
-        let w = self.width.value(absolute_time);
-        self.current_width.set(w);
         !self.width.is_idle(absolute_time)
     }
 
@@ -123,8 +117,8 @@ impl Element for WorkspaceDot {
         Some(self.workspace_id)
     }
 
-    fn size(&self) -> (f32, f32) {
-        (self.current_width.get(), WORKSPACE_R * 2.0)
+    fn size(&self, absolute_time: f32) -> (f32, f32) {
+        (self.width.value(absolute_time), WORKSPACE_R * 2.0)
     }
 }
 
@@ -139,9 +133,12 @@ pub struct LeftPanel {
 impl LeftPanel {
     pub fn new(handle: WorkspaceHandle) -> Self {
         let snap = handle.snapshot();
-        let ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
+        let mut ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
+        ids.sort_unstable();
         let mut row = Row::new().spacing(WORKSPACE_SPACING);
-        for ws in &snap.workspaces {
+        let mut sorted = snap.workspaces.clone();
+        sorted.sort_by_key(|ws| ws.id);
+        for ws in &sorted {
             row.push(Box::new(WorkspaceDot::new(
                 ws.id,
                 ws.id == snap.active_id,
@@ -160,20 +157,27 @@ impl Element for LeftPanel {
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let snap = self.handle.snapshot();
 
-        // Structural changes — add / remove workspace dots
-        let cur_ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
+        // Structural changes — add / remove workspace dots, maintain numeric order
+        let mut cur_ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
+        cur_ids.sort_unstable();
         if cur_ids != self.prev_workspace_ids {
-            self.row.children_mut().retain(|c| match c.id() {
-                Some(id) => cur_ids.contains(&id),
-                None => true,
-            });
-            for ws in &snap.workspaces {
-                if !self.prev_workspace_ids.contains(&ws.id) {
-                    self.row.push(Box::new(WorkspaceDot::new(
+            let old: Vec<Box<dyn Element>> = self.row.children_mut().drain(..).collect();
+            let mut by_id: Vec<(i32, Box<dyn Element>)> = old
+                .into_iter()
+                .filter_map(|c| c.id().map(|id| (id, c)))
+                .collect();
+
+            let mut sorted = snap.workspaces.clone();
+            sorted.sort_by_key(|ws| ws.id);
+
+            for ws in &sorted {
+                match by_id.iter().position(|(id, _)| *id == ws.id) {
+                    Some(idx) => self.row.push(by_id.remove(idx).1),
+                    None => self.row.push(Box::new(WorkspaceDot::new(
                         ws.id,
                         ws.id == snap.active_id,
                         self.handle.clone(),
-                    )));
+                    ))),
                 }
             }
             self.prev_workspace_ids = cur_ids;
@@ -185,7 +189,7 @@ impl Element for LeftPanel {
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
         let layout = PanelLayout::from_surface(ctx.surface_h);
         let y = indicator_row_y(ctx.surface_h);
-        let row_w = self.row.size().0;
+        let row_w = self.row.size(ctx.absolute_time).0;
         let panel_w = row_w + layout.start_x + layout.end_pad;
 
         draw_background(surface, ctx.surface_w, ctx.surface_h, layout.panel_h, panel_w);
