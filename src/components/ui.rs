@@ -34,4 +34,13 @@ pub trait Element {
     fn size(&self, _absolute_time: f32) -> (f32, f32) {
         (0.0, 0.0)
     }
+
+    fn replace_children(
+        &mut self,
+        children: Vec<Box<dyn Element>>,
+    ) -> Vec<Box<dyn Element>> {
+        children
+    }
+
+    fn push_child(&mut self, _child: Box<dyn Element>) {}
 }

@@ -23,6 +23,7 @@ impl Lerp for f32 {
 pub struct Animated<T: Lerp + Copy> {
     target: T,
     start_value: T,
+    current_value: T,
     start_time: f32,
     duration_secs: f32,
     easing: Easing,
@@ -33,6 +34,7 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
         Self {
             target: value,
             start_value: value,
+            current_value: value,
             start_time: 0.0,
             duration_secs: 0.2,
             easing: Easing::Linear,
@@ -54,8 +56,27 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
         self
     }
 
+    /// Returns true if it's still animating.
+    pub fn tick(&mut self, now: f32) -> bool {
+        self.current_value = self.value_at(now);
+        !self.is_idle(now)
+    }
+
+    pub fn value(&self) -> T {
+        self.current_value
+    }
+
+    pub fn value_at(&self, now: f32) -> T {
+        let elapsed = now - self.start_time;
+        if elapsed >= self.duration_secs {
+            return self.target;
+        }
+        let t = self.easing.apply(elapsed / self.duration_secs);
+        T::lerp(self.start_value, self.target, t)
+    }
+
     pub fn set_target(&mut self, target: T, now: f32) {
-        let from = self.value(now);
+        let from = self.value_at(now);
         if from == target {
             self.target = target;
             self.start_value = target;
@@ -65,15 +86,6 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
         self.start_value = from;
         self.target = target;
         self.start_time = now;
-    }
-
-    pub fn value(&self, now: f32) -> T {
-        let elapsed = now - self.start_time;
-        if elapsed >= self.duration_secs {
-            return self.target;
-        }
-        let t = self.easing.apply(elapsed / self.duration_secs);
-        T::lerp(self.start_value, self.target, t)
     }
 
     pub fn is_idle(&self, now: f32) -> bool {

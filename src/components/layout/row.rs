@@ -88,4 +88,15 @@ impl Element for Row {
         }
         false
     }
+
+    fn replace_children(
+        &mut self,
+        children: Vec<Box<dyn Element>>,
+    ) -> Vec<Box<dyn Element>> {
+        std::mem::replace(&mut self.children, children)
+    }
+
+    fn push_child(&mut self, child: Box<dyn Element>) {
+        self.children.push(child);
+    }
 }

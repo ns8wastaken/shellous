@@ -1,4 +1,5 @@
-use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::components::canvas::DrawingSurface;
+use crate::components::layout::padding::Padding;
 use crate::components::layout::row::Row;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
@@ -100,12 +101,11 @@ impl Element for WorkspaceDot {
 
 pub struct LeftPanel {
     handle: WorkspaceHandle,
-    row: Row,
+    padded_row: Padding,
     panel_width: Animated<f32>,
     stored_padding: f32,
     bottom_offset: f32,
     prev_workspace_ids: Vec<i32>,
-    row_padding: (f32, f32), // (left, top)
 }
 
 impl LeftPanel {
@@ -122,7 +122,6 @@ impl LeftPanel {
                 handle.clone(),
             )));
         }
-        let panel_w = row_size_at_time(&row, 0.0) + bottom_offset * 3.0;
 
         // surface height is 30 + bottom_offset (from bar/mod.rs),
         // so panel_h = (30 + bottom_offset) - bottom_offset = 30 always.
@@ -130,29 +129,21 @@ impl LeftPanel {
         let left = panel_h * 0.5;
         let top = panel_h * 0.5 - WORKSPACE_R;
 
+        let row_w = row.size(0.0).0;
+        let panel_w = row_w + bottom_offset * 3.0;
+        let padded_row = Padding::new(Box::new(row)).left(left).top(top);
+
         Self {
             handle,
-            row,
+            padded_row,
             panel_width: Animated::new(panel_w)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
             stored_padding: bottom_offset * 2.5,
             bottom_offset,
             prev_workspace_ids: ids,
-            row_padding: (left, top),
         }
     }
-}
-
-fn row_size_at_time(row: &Row, absolute_time: f32) -> f32 {
-    let mut w = 0.0;
-    for (i, c) in row.children.iter().enumerate() {
-        w += c.size(absolute_time).0;
-        if i + 1 < row.children.len() {
-            w += WORKSPACE_SPACING;
-        }
-    }
-    w
 }
 
 impl Element for LeftPanel {
@@ -163,7 +154,7 @@ impl Element for LeftPanel {
         let mut cur_ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
         cur_ids.sort_unstable();
         if cur_ids != self.prev_workspace_ids {
-            let old: Vec<Box<dyn Element>> = self.row.children.drain(..).collect();
+            let old = self.padded_row.child.replace_children(Vec::new());
             let mut by_id: Vec<(i32, Box<dyn Element>)> = old
                 .into_iter()
                 .filter_map(|c| c.id().map(|id| (id, c)))
@@ -174,8 +165,8 @@ impl Element for LeftPanel {
 
             for ws in &sorted {
                 match by_id.iter().position(|(id, _)| *id == ws.id) {
-                    Some(idx) => self.row.push(by_id.remove(idx).1),
-                    None => self.row.push(Box::new(WorkspaceDot::new(
+                    Some(idx) => self.padded_row.child.push_child(by_id.remove(idx).1),
+                    None => self.padded_row.child.push_child(Box::new(WorkspaceDot::new(
                         ws.id,
                         self.handle.clone(),
                     ))),
@@ -184,9 +175,9 @@ impl Element for LeftPanel {
             self.prev_workspace_ids = cur_ids;
         }
 
-        let row_animating = self.row.tick_animations(absolute_time);
+        let row_animating = self.padded_row.tick_animations(absolute_time);
 
-        let target = row_size_at_time(&self.row, absolute_time) + self.stored_padding;
+        let target = self.padded_row.child.size(absolute_time).0 + self.stored_padding;
         self.panel_width.set_target(target, absolute_time);
 
         row_animating || !self.panel_width.is_idle(absolute_time)
@@ -198,12 +189,11 @@ impl Element for LeftPanel {
 
         draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, panel_w, self.bottom_offset);
 
-        let tc = TranslatedCanvas::new(surface, self.row_padding.0, self.row_padding.1);
-        self.row.draw(&tc, ctx);
+        self.padded_row.draw(surface, ctx);
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        self.row.on_click(x - self.row_padding.0, y - self.row_padding.1, ctx)
+        self.padded_row.on_click(x, y, ctx)
     }
 }
 
