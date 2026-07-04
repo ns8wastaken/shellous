@@ -48,13 +48,12 @@ struct WorkspaceDot {
 }
 
 impl WorkspaceDot {
-    fn new(workspace_id: i32, is_active: bool, handle: WorkspaceHandle) -> Self {
-        let initial = if is_active { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
+    fn new(workspace_id: i32, handle: WorkspaceHandle) -> Self {
         Self {
             workspace_id,
             handle,
-            is_active,
-            width: Animated::new(initial)
+            is_active: false,
+            width: Animated::new(WORKSPACE_INACTIVE_W)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
         }
@@ -141,7 +140,6 @@ impl LeftPanel {
         for ws in &sorted {
             row.push(Box::new(WorkspaceDot::new(
                 ws.id,
-                ws.id == snap.active_id,
                 handle.clone(),
             )));
         }
@@ -175,7 +173,6 @@ impl Element for LeftPanel {
                     Some(idx) => self.row.push(by_id.remove(idx).1),
                     None => self.row.push(Box::new(WorkspaceDot::new(
                         ws.id,
-                        ws.id == snap.active_id,
                         self.handle.clone(),
                     ))),
                 }
