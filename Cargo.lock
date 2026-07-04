@@ -227,6 +227,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "shellous"
+version = "0.1.0"
+dependencies = [
+ "gl",
+ "khronos-egl",
+ "libc",
+ "libloading",
+ "serde",
+ "serde_json",
+ "wayland-client",
+ "wayland-egl",
+ "wayland-protocols 0.31.2",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -247,22 +263,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "test-rs"
-version = "0.1.0"
-dependencies = [
- "gl",
- "khronos-egl",
- "libc",
- "libloading",
- "serde",
- "serde_json",
- "wayland-client",
- "wayland-egl",
- "wayland-protocols 0.31.2",
- "wayland-protocols-wlr",
 ]
 
 [[package]]

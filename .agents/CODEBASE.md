@@ -1,6 +1,6 @@
 # Codebase Overview
 
-**Project**: `test-rs` (aka "Shellous")  
+**Project**: `shellous` (aka "Shellous")  
 **Language**: Rust (edition 2024)  
 **Purpose**: A custom Wayland status bar rendered via `wlr-layer-shell` protocol with OpenGL ES 3.0 shaders, targeting the Hyprland compositor. Surface protocol support is polymorphic (via a `Surface` trait over `Layer`/`Toplevel`) so future windows, popups, and notifications can plug into the same render loop.
 

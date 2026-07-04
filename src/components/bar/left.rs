@@ -130,15 +130,24 @@ impl Element for LeftPanel {
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
         let layout = PanelLayout::from_surface(ctx.surface_h);
-
-        // Layout dots
-        let mut x = layout.start_x;
         let y = indicator_row_y(ctx.surface_h);
 
+        // First pass — compute total width for background
+        let mut x = layout.start_x;
+        for dot in &self.dots {
+            x += dot.width.value(ctx.absolute_time) + WORKSPACE_SPACING;
+        }
+        let panel_w = x + layout.end_pad;
+
+        // Background (behind dots)
+        draw_background(surface, ctx.surface_w, ctx.surface_h, layout.panel_h, panel_w);
+
+        // Second pass — draw dots on top
+        x = layout.start_x;
         for dot in &self.dots {
             let w = dot.width.value(ctx.absolute_time);
             let fill = if dot.workspace_id == self.prev_active_id {
-                Color { r: 0.10, g: 0.12, b: 0.14, a: 1.0 }
+                Color { r: 1.0, g: 0.12, b: 0.14, a: 1.0 }
             } else {
                 Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
             };
@@ -164,10 +173,6 @@ impl Element for LeftPanel {
             );
             x += w + WORKSPACE_SPACING;
         }
-
-        // Background
-        let panel_w = layout.start_x + (x - WORKSPACE_SPACING - layout.start_x) + layout.end_pad;
-        draw_background(surface, ctx.surface_w, ctx.surface_h, layout.panel_h, panel_w);
     }
 
     fn on_click(&self, click_x: f32, click_y: f32, ctx: &RenderContext) -> bool {
