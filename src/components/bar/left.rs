@@ -1,4 +1,3 @@
-use crate::ui::Action;
 use crate::components::bar::state;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
@@ -33,15 +32,6 @@ impl Element for LeftPanel {
             (bar.workspaces.len(), active_slot)
         };
 
-        let hover_slot = ctx
-            .pointer_pos
-            .and_then(|(px, py)| {
-                let buttons = state::button_layout(ws_count, ctx.surface_h);
-                state::hit_test(&buttons, px as f32, py as f32)
-            })
-            .map(|i| i as i32)
-            .unwrap_or(-1);
-
         let panel_h = ctx.surface_h - 18.0;
 
         draw_background(rect, ctx.surface_w, ctx.surface_h, panel_h, self.width);
@@ -53,21 +43,24 @@ impl Element for LeftPanel {
             panel_h,
             ws_count,
             active_slot,
-            hover_slot,
         );
     }
 
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> Action {
+    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
         let bar = ctx.state.bar.lock().unwrap();
         let ws_count = bar.workspaces.len();
         let buttons = state::button_layout(ws_count, ctx.surface_h);
 
-        match state::hit_test(&buttons, x, y) {
-            Some(idx) => {
-                let id = bar.workspaces[idx].id;
-                Action::SwitchWorkspace(id)
+        let ws_id = state::hit_test(&buttons, x, y)
+            .map(|idx| bar.workspaces[idx].id);
+        drop(bar);
+
+        match ws_id {
+            Some(id) => {
+                ctx.state.compositor.switch_workspace(id);
+                true
             }
-            None => Action::None,
+            None => false,
         }
     }
 }
@@ -78,7 +71,6 @@ fn draw_active_indicator(
     surface_h: f32,
     elem_x: f32,
     elem_y: f32,
-    hover: bool,
 ) {
     let inner_style = RectStyle {
         fill: Color { r: 0.10, g: 0.12, b: 0.14, a: 0.5 },
@@ -95,27 +87,6 @@ fn draw_active_indicator(
         &inner_style,
         Mat3::translation(elem_x - WORKSPACE_ACTIVE_W * 0.5, elem_y - WORKSPACE_ACTIVE_W * 0.5),
     );
-
-    if hover {
-        let gw = WORKSPACE_ACTIVE_W + 2.0;
-        let gh = WORKSPACE_R * 2.0 + 2.0;
-        let gr = gh * 0.5;
-        let glow_style = RectStyle {
-            fill: Color { r: 0.55, g: 0.70, b: 0.90, a: 0.12 },
-            fill_mode: FillMode::Solid,
-            radius: Corners { tl: gr, tr: gr, br: gr, bl: gr },
-            softness: 1.5,
-            ..Default::default()
-        };
-        rect.draw(
-            surface_w,
-            surface_h,
-            gw,
-            gh,
-            &glow_style,
-            Mat3::translation(elem_x - gr, elem_y - gr),
-        );
-    }
 }
 
 fn draw_inactive_indicator(
@@ -124,16 +95,9 @@ fn draw_inactive_indicator(
     surface_h: f32,
     elem_x: f32,
     elem_y: f32,
-    hover: bool,
 ) {
-    let dot_color = if hover {
-        Color { r: 0.35, g: 0.40, b: 0.50, a: 1.0 }
-    } else {
-        Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
-    };
-
     let style = RectStyle {
-        fill: dot_color,
+        fill: Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 },
         fill_mode: FillMode::Solid,
         radius: Corners { tl: WORKSPACE_R, tr: WORKSPACE_R, br: WORKSPACE_R, bl: WORKSPACE_R },
         softness: 0.85,
@@ -147,22 +111,6 @@ fn draw_inactive_indicator(
         &style,
         Mat3::translation(elem_x - WORKSPACE_R, elem_y - WORKSPACE_R)
     );
-
-    if hover {
-        let gsize = WORKSPACE_INACTIVE_W + 2.0;
-        let gr = gsize * 0.5;
-        let glow_style = RectStyle {
-            fill: Color { r: 0.40, g: 0.50, b: 0.65, a: 0.10 },
-            fill_mode: FillMode::Solid,
-            radius: Corners { tl: gr, tr: gr, br: gr, bl: gr },
-            softness: 1.5,
-            ..Default::default()
-        };
-        rect.draw(
-            surface_w, surface_h, gsize, gsize, &glow_style,
-            Mat3::translation(elem_x - gr, elem_y - gr),
-        );
-    }
 }
 
 fn draw_workspace_indicators(
@@ -173,7 +121,6 @@ fn draw_workspace_indicators(
     panel_h: f32,
     ws_count: usize,
     active_slot: i32,
-    hover_slot: i32,
 ) {
     let elem_y = panel_h * 0.5;
 
@@ -190,7 +137,6 @@ fn draw_workspace_indicators(
                 surface_h,
                 elem_x,
                 elem_y,
-                i as i32 == hover_slot
             );
         } else {
             draw_inactive_indicator(
@@ -199,7 +145,6 @@ fn draw_workspace_indicators(
                 surface_h,
                 elem_x,
                 elem_y,
-                i as i32 == hover_slot
             );
         }
     }

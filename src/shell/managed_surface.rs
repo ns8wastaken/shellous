@@ -8,7 +8,7 @@ use crate::renderer::programs::rect::RectProgram;
 use crate::shell::layer_surface::LayerSurface;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
-use crate::ui::{Action, Element, RenderContext, click_elements, draw_elements};
+use crate::ui::{Element, RenderContext, click_elements, draw_elements};
 
 pub struct ManagedSurface {
     pub id: SurfaceId,
@@ -43,7 +43,7 @@ impl ManagedSurface {
         draw_elements(&self.elements, rect, ctx);
     }
 
-    pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> Action {
-        click_elements(&self.elements, x, y, ctx)
+    pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) {
+        click_elements(&self.elements, x, y, ctx);
     }
 }

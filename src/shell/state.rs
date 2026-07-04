@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use crate::components::bar::BarState;
-use crate::ui::Action;
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface_id::SurfaceId;
@@ -63,13 +62,7 @@ impl ShellState {
 
         let surface = &self.surfaces[idx];
         let ctx = surface.render_context(self);
-        match surface.on_click(x, y, &ctx) {
-            Action::SwitchWorkspace(id) => {
-                eprintln!("[shell] switching to workspace {id}");
-                self.compositor.switch_workspace(id);
-            }
-            Action::None => {}
-        }
+        surface.on_click(x, y, &ctx);
     }
 
     pub fn set_focus_by_surface(

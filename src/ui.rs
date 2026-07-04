@@ -2,14 +2,6 @@ use crate::renderer::programs::rect::RectProgram;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
 
-// ==================== ACTION ====================
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
-    None,
-    SwitchWorkspace(i32),
-}
-
 // ==================== ELEMENT ====================
 
 pub struct RenderContext<'a> {
@@ -20,12 +12,17 @@ pub struct RenderContext<'a> {
     pub pointer_pos: Option<(f64, f64)>,
 }
 
+/// A drawable, clickable UI element on a shell surface.
+///
+/// `on_click` receives pixel coordinates relative to the surface origin.
+/// Return `true` if the click was handled (stops iteration over elements);
+/// return `false` to let the next element in z-order try.
 pub trait Element {
     fn draw(&self, rect: &RectProgram, ctx: &RenderContext);
 
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> Action {
+    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
         let _ = (x, y, ctx);
-        Action::None
+        false
     }
 }
 
@@ -37,12 +34,12 @@ pub fn draw_elements(elements: &[Box<dyn Element>], rect: &RectProgram, ctx: &Re
     }
 }
 
-pub fn click_elements(elements: &[Box<dyn Element>], x: f32, y: f32, ctx: &RenderContext) -> Action {
+/// Iterates elements in reverse z-order (last-drawn = topmost for clicks).
+/// Stops at the first element that returns `true` from `on_click`.
+pub fn click_elements(elements: &[Box<dyn Element>], x: f32, y: f32, ctx: &RenderContext) {
     for element in elements.iter().rev() {
-        let action = element.on_click(x, y, ctx);
-        if action != Action::None {
-            return action;
+        if element.on_click(x, y, ctx) {
+            return;
         }
     }
-    Action::None
 }
