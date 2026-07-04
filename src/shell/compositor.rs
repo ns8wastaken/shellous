@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::workspace::{Workspace, WorkspaceState};
+use crate::services::workspace::{Workspace, WorkspaceState};
 
 // ==================== EVENT TYPE ====================
 

@@ -11,7 +11,7 @@ use std::time::Duration;
 use crate::shell::compositor::{
     Compositor, CompositorEvent, StateCallback, SubscriptionId,
 };
-use crate::workspace::Workspace;
+use crate::services::workspace::Workspace;
 
 // ==================== INTERNAL JSON TYPES ====================
 

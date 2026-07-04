@@ -5,7 +5,6 @@ mod renderer;
 mod services;
 mod shell;
 mod ui;
-mod workspace;
 
 use std::sync::Arc;
 
