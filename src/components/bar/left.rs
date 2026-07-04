@@ -1,10 +1,10 @@
-use crate::canvas::DrawingSurface;
-use crate::components::row::Row;
+use crate::components::canvas::DrawingSurface;
+use crate::components::ui::{Element, RenderContext};
+use crate::renderer::animation::Animated;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
-use crate::services::workspace::{WorkspaceHandle, WorkspaceSnapshot};
-use crate::ui::{Element, RenderContext};
+use crate::services::workspace::WorkspaceHandle;
 
 const WORKSPACE_SPACING: f32 = 8.0;
 const WORKSPACE_R: f32 = 5.5;
@@ -12,17 +12,8 @@ const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
 const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
 const PANEL_OFFSET_Y: f32 = 18.0;
 
-/// Three panel-extent values are derived from one base — `rounding`. They're
-/// kept as a struct so the relationship reads clearly at the call site:
-///
-/// ```text
-/// rounding = panel_h / 2
-/// start_x  = rounding      (= panel_h / 2)
-/// end_pad  = rounding * 2  (= panel_h)
-/// ```
-///
-/// So with the typical `panel_h = 36`: `start_x = 18`, `end_pad = 36`.
-/// Tweak `rounding` (the single knob) and the whole panel recomposes.
+// ==================== PANEL LAYOUT ====================
+
 struct PanelLayout {
     panel_h: f32,
     start_x: f32,
@@ -41,126 +32,159 @@ impl PanelLayout {
     }
 }
 
-/// Vertical y for the indicator row: cell-local origin sits here such that
-/// the dot's geometric center lands on the panel's vertical midline.
 fn indicator_row_y(surface_h: f32) -> f32 {
     (surface_h - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R
 }
 
-/// Index of the active workspace inside the snapshot, if any.
-fn active_index(snap: &WorkspaceSnapshot) -> Option<usize> {
-    snap.workspaces.iter().position(|w| w.id == snap.active_id)
+// ==================== WORKSPACE DOT ====================
+
+struct WorkspaceDot {
+    workspace_id: i32,
+    width: Animated<f32>,
 }
+
+impl WorkspaceDot {
+    fn new(workspace_id: i32, is_active: bool) -> Self {
+        let initial = if is_active { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
+        Self {
+            workspace_id,
+            width: Animated::new(initial),
+        }
+    }
+}
+
+// ==================== LEFT PANEL ====================
 
 pub struct LeftPanel {
     handle: WorkspaceHandle,
+    prev_active_id: i32,
+    prev_workspace_ids: Vec<i32>,
+    dots: Vec<WorkspaceDot>,
 }
 
 impl LeftPanel {
     pub fn new(handle: WorkspaceHandle) -> Self {
-        Self { handle }
+        let snap = handle.snapshot();
+        let dots: Vec<_> = snap
+            .workspaces
+            .iter()
+            .map(|ws| WorkspaceDot::new(ws.id, ws.id == snap.active_id))
+            .collect();
+        Self {
+            handle,
+            prev_active_id: snap.active_id,
+            prev_workspace_ids: snap.workspaces.iter().map(|w| w.id).collect(),
+            dots,
+        }
     }
 }
 
 impl Element for LeftPanel {
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let layout = PanelLayout::from_surface(ctx.surface_h);
+    fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let snap = self.handle.snapshot();
-        let active_idx = active_index(&snap);
 
-        let mut row = Row::new()
-            .at(layout.start_x, indicator_row_y(ctx.surface_h))
-            .spacing(WORKSPACE_SPACING);
-        for (i, ws) in snap.workspaces.iter().enumerate() {
-            row = row.add(Box::new(WorkspaceIndicatorCell {
-                workspace_id: ws.id,
-                is_active: active_idx == Some(i),
-            }));
+        // Detect active workspace change
+        if snap.active_id != self.prev_active_id {
+            // Old active → inactive width
+            for dot in &mut self.dots {
+                if dot.workspace_id == self.prev_active_id {
+                    dot.width
+                        .set_target(WORKSPACE_INACTIVE_W, absolute_time);
+                }
+            }
+            // New active → active width
+            for dot in &mut self.dots {
+                if dot.workspace_id == snap.active_id {
+                    dot.width
+                        .set_target(WORKSPACE_ACTIVE_W, absolute_time);
+                }
+            }
+            self.prev_active_id = snap.active_id;
         }
 
-        // Panel width: leading offset (start_x) + the row's own computed
-        // width (sum of cell widths + (n-1) spacings) + trailing padding (end_pad).
-        let panel_w = layout.start_x + row.size().0 + layout.end_pad;
+        // Detect workspace list changes (add/remove)
+        let cur_ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
+        if cur_ids != self.prev_workspace_ids {
+            // Added workspaces
+            for ws in &snap.workspaces {
+                if !self.prev_workspace_ids.contains(&ws.id) {
+                    self.dots.push(WorkspaceDot::new(ws.id, ws.id == snap.active_id));
+                }
+            }
+            // Removed workspaces
+            self.dots
+                .retain(|dot| cur_ids.contains(&dot.workspace_id));
+            self.prev_workspace_ids = cur_ids;
+        }
+
+        // Check if any dot is still animating
+        let mut any_active = false;
+        for dot in &self.dots {
+            if !dot.width.is_idle(absolute_time) {
+                any_active = true;
+                break;
+            }
+        }
+        any_active
+    }
+
+    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
+        let layout = PanelLayout::from_surface(ctx.surface_h);
+
+        // Layout dots
+        let mut x = layout.start_x;
+        let y = indicator_row_y(ctx.surface_h);
+
+        for dot in &self.dots {
+            let w = dot.width.value(ctx.absolute_time);
+            let fill = if dot.workspace_id == self.prev_active_id {
+                Color { r: 0.10, g: 0.12, b: 0.14, a: 1.0 }
+            } else {
+                Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
+            };
+            let style = RectStyle {
+                fill,
+                fill_mode: FillMode::Solid,
+                radius: Corners {
+                    tl: WORKSPACE_R,
+                    tr: WORKSPACE_R,
+                    br: WORKSPACE_R,
+                    bl: WORKSPACE_R,
+                },
+                softness: 0.85,
+                ..Default::default()
+            };
+            surface.draw_rect(
+                ctx.surface_w,
+                ctx.surface_h,
+                w,
+                WORKSPACE_R * 2.0,
+                &style,
+                Mat3::translation(x, y),
+            );
+            x += w + WORKSPACE_SPACING;
+        }
+
+        // Background
+        let panel_w = layout.start_x + (x - WORKSPACE_SPACING - layout.start_x) + layout.end_pad;
         draw_background(surface, ctx.surface_w, ctx.surface_h, layout.panel_h, panel_w);
-        row.draw(surface, ctx);
     }
 
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
+    fn on_click(&self, click_x: f32, click_y: f32, ctx: &RenderContext) -> bool {
         let layout = PanelLayout::from_surface(ctx.surface_h);
-        let snap = self.handle.snapshot();
-        let active_idx = active_index(&snap);
+        let mut x = layout.start_x;
+        let y = indicator_row_y(ctx.surface_h);
 
-        let mut row = Row::new()
-            .at(layout.start_x, indicator_row_y(ctx.surface_h))
-            .spacing(WORKSPACE_SPACING);
-        for (i, ws) in snap.workspaces.iter().enumerate() {
-            row = row.add(Box::new(WorkspaceIndicatorCell {
-                workspace_id: ws.id,
-                is_active: active_idx == Some(i),
-            }));
+        for dot in &self.dots {
+            let w = dot.width.value(ctx.absolute_time);
+            let h = WORKSPACE_R * 2.0;
+            if click_x >= x && click_x <= x + w && click_y >= y && click_y <= y + h {
+                ctx.state.compositor.activate_workspace(dot.workspace_id);
+                return true;
+            }
+            x += w + WORKSPACE_SPACING;
         }
-
-        // Mirror the panel-w computation from `draw` so future click
-        // affordances can rely on the same bbox. Currently unused by
-        // `row.on_click`; keep in step in case a background-affordance
-        // click handler is added.
-        let _panel_w = layout.start_x + row.size().0 + layout.end_pad;
-        row.on_click(x, y, ctx)
-    }
-}
-
-// ==================== WORKSPACE INDICATOR CELL ====================
-
-/// One row cell. Cell-local origin (0, 0) is where Row's TranslatedCanvas
-/// maps to on screen — the cell draws at identity.
-struct WorkspaceIndicatorCell {
-    workspace_id: i32,
-    is_active: bool,
-}
-
-impl WorkspaceIndicatorCell {
-    fn width(&self) -> f32 {
-        if self.is_active {
-            WORKSPACE_ACTIVE_W
-        } else {
-            WORKSPACE_INACTIVE_W
-        }
-    }
-}
-
-impl Element for WorkspaceIndicatorCell {
-    fn size(&self) -> (f32, f32) {
-        (self.width(), WORKSPACE_R * 2.0)
-    }
-
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let fill = if self.is_active {
-            Color { r: 0.10, g: 0.12, b: 0.14, a: 1.0 }
-        } else {
-            Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
-        };
-        let style = RectStyle {
-            fill,
-            fill_mode: FillMode::Solid,
-            radius: Corners {
-                tl: WORKSPACE_R, tr: WORKSPACE_R, br: WORKSPACE_R, bl: WORKSPACE_R,
-            },
-            softness: 0.85,
-            ..Default::default()
-        };
-        surface.draw_rect(
-            ctx.surface_w,
-            ctx.surface_h,
-            self.width(),
-            WORKSPACE_R * 2.0,
-            &style,
-            Mat3::identity(),
-        );
-    }
-
-    fn on_click(&self, _x: f32, _y: f32, ctx: &RenderContext) -> bool {
-        ctx.state.compositor.activate_workspace(self.workspace_id);
-        true
+        false
     }
 }
 

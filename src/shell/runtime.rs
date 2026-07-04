@@ -1,7 +1,9 @@
 use std::cell::Cell;
+use std::os::unix::io::{AsFd, AsRawFd};
 use std::sync::Arc;
+use std::time::Instant;
 
-use crate::canvas::Canvas;
+use crate::components::ui::Element;
 use crate::renderer::Renderer;
 use crate::services::workspace::WorkspaceService;
 use crate::shell::compositor::Compositor;
@@ -13,11 +15,9 @@ use crate::shell::surface::{Surface, SurfaceKind};
 use crate::shell::surface_id::SurfaceId;
 use crate::shell::wayland::WaylandState;
 use crate::shell::xdg_surface::XdgToplevelSurface;
-use crate::ui::Element;
 
 // ==================== SURFACE SPEC POLYMORPHISM ====================
 
-/// Configuration for a zwlr-layer-shell panel surface.
 pub struct LayerSpec {
     pub namespace: String,
     pub anchor: ShellAnchor,
@@ -28,7 +28,6 @@ pub struct LayerSpec {
     pub elements: Vec<Box<dyn Element>>,
 }
 
-/// Configuration for an xdg-shell toplevel surface.
 pub struct ToplevelSpec {
     pub title: String,
     pub app_id: String,
@@ -37,14 +36,8 @@ pub struct ToplevelSpec {
     pub elements: Vec<Box<dyn Element>>,
 }
 
-/// Polymorphic surface spec. `Layer` is the existing bar-panel kind;
-/// `Toplevel` is the new xdg-shell window kind. New variants slot in
-/// here as their scaffolding lands.
 pub enum SurfaceSpec {
     Layer(LayerSpec),
-    /// Scaffolding for future toplevel components. No current consumer
-    /// in this codebase (bar uses `Layer`); silenced until the first
-    /// toplevel mounts.
     #[allow(dead_code)]
     Toplevel(ToplevelSpec),
 }
@@ -84,8 +77,6 @@ impl Shell {
         let id = self.state.next_id;
         self.state.next_id += 1;
 
-        // Construct the right Wayland object for the configured kind,
-        // set its params, commit once, and hand back (kind, elements).
         let (kind, elements): (SurfaceKind, Vec<Box<dyn Element>>) = match config {
             SurfaceSpec::Layer(spec) => {
                 let layer_surface = LayerSurface::new(
@@ -128,8 +119,6 @@ impl Shell {
             dirty: Cell::new(true),
         });
 
-        // 1. wait for the compositor's first Configure (configure carries
-        //    the initial size on the surface_kind via its dispatch).
         let surface_state_arc = {
             let surface = self.state.find_surface(id).unwrap();
             Arc::clone(surface.kind.surface_state())
@@ -137,7 +126,6 @@ impl Shell {
         self.wayland
             .wait_for_configure(&mut self.state, &surface_state_arc);
 
-        // 2. create the EGL-backed renderer now that dimensions are known.
         let dims = {
             let surface = self.state.find_surface(id).unwrap();
             surface.kind.dimensions()
@@ -155,26 +143,104 @@ impl Shell {
     }
 
     pub fn run(&mut self) {
-        loop {
-            self.wayland.dispatch_pending(&mut self.state);
+        let shell_start = Instant::now();
+        let wayland_fd = self.wayland.conn.as_fd().as_raw_fd();
+        let wake_fd = self.state.compositor.wake_fd();
 
-            let qh = self.wayland.qh().clone();
-            for entry in &self.state.surfaces {
-                if !entry.dirty.get() || entry.renderer.is_none() {
-                    continue;
+        let mut fds = [
+            libc::pollfd {
+                fd: wayland_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: wake_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+
+        loop {
+            // 1. Flush outbound requests
+            let _ = self.wayland.conn.flush();
+
+            // 2. Drain already-buffered events
+            while let Ok(count) = self.wayland.event_queue.dispatch_pending(&mut self.state) {
+                if count == 0 {
+                    break;
                 }
-                entry.request_frame(&qh);
-                let renderer = entry.renderer.as_ref().unwrap();
-                renderer.make_current();
-                let ctx = entry.render_context(&self.state);
-                let canvas = Canvas::new(renderer.rect_program());
-                renderer.render_frame(&ctx, || {
-                    entry.draw(&canvas, &ctx);
-                });
-                entry.dirty.set(false);
             }
 
-            self.wayland.blocking_dispatch(&mut self.state);
+            // 3. Prepare read guard
+            let read_guard = match self.wayland.event_queue.prepare_read() {
+                Some(guard) => guard,
+                None => continue,  // events already buffered — loop to dispatch
+            };
+
+            // 4. Compute poll timeout from state matrix
+            let timeout = if self.state.is_animating() { 0 } else { -1 };
+
+            // 5. Block on kernel
+            let poll_ret = unsafe {
+                libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout)
+            };
+
+            if poll_ret < 0 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() != std::io::ErrorKind::Interrupted {
+                    break;
+                }
+                continue;
+            }
+
+            // 6a. Process Wayland socket
+            if (fds[0].revents & libc::POLLIN) != 0 {
+                if read_guard.read().is_ok() {
+                    let _ = self.wayland.event_queue.dispatch_pending(&mut self.state);
+                }
+            } else {
+                std::mem::drop(read_guard);
+            }
+
+            // 6b. Process eventfd wake (workspace change)
+            if (fds[1].revents & libc::POLLIN) != 0 {
+                let mut buf = [0u8; 8];
+                unsafe {
+                    libc::read(
+                        wake_fd,
+                        buf.as_mut_ptr() as *mut std::ffi::c_void,
+                        8,
+                    );
+                }
+                self.state.sync_workspace_snapshots();
+            }
+
+            // 7. Compute absolute time
+            let absolute_time = shell_start.elapsed().as_secs_f32();
+
+            // 8. Tick & Render phase
+            if self.state.is_animating() || self.state.any_dirty() {
+                let still_moving = self.state.tick_animations(absolute_time);
+
+                if still_moving {
+                    let qh = self.wayland.qh();
+                    for entry in &self.state.surfaces {
+                        // NOTE: not checking `entry.dirty.get()` while animating
+                        if entry.renderer.is_some() {
+                            entry.request_frame(qh);
+                        }
+                    }
+                }
+
+                self.state.render(absolute_time);
+
+                if !still_moving {
+                    self.state.set_animating(false);
+                    for entry in &mut self.state.surfaces {
+                        entry.dirty.set(false);
+                    }
+                }
+            }
         }
     }
 }

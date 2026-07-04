@@ -1,5 +1,8 @@
+use std::cell::Cell;
 use std::sync::Arc;
 
+use crate::components::canvas::Canvas;
+use crate::components::ui::{draw_elements, RenderContext};
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface::Surface;
@@ -11,6 +14,7 @@ pub struct ShellState {
     pub focused_surface: Option<SurfaceId>,
     pub pointer_pos: Option<(f64, f64)>,
     pub next_id: SurfaceId,
+    pub animating: Cell<bool>,
 }
 
 impl ShellState {
@@ -21,6 +25,7 @@ impl ShellState {
             focused_surface: None,
             pointer_pos: None,
             next_id: 0,
+            animating: Cell::new(false),
         }
     }
 
@@ -45,6 +50,56 @@ impl ShellState {
         }
     }
 
+    pub fn is_animating(&self) -> bool {
+        self.animating.get()
+    }
+
+    pub fn set_animating(&self, v: bool) {
+        self.animating.set(v);
+    }
+
+    pub fn any_dirty(&self) -> bool {
+        self.surfaces.iter().any(|s| s.dirty.get())
+    }
+
+    /// Called after eventfd wake. Kicks off the animation cycle.
+    pub fn sync_workspace_snapshots(&mut self) {
+        for entry in &mut self.surfaces {
+            entry.dirty.set(true);
+        }
+        self.animating.set(true);
+    }
+
+    /// Update phase — tick all element animations. Returns true if any
+    /// animation is still active.
+    pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
+        let mut still_moving = false;
+        for entry in &mut self.surfaces {
+            if entry.renderer.is_some() && entry.dirty.get() {
+                if entry.tick_animations(absolute_time) {
+                    still_moving = true;
+                }
+            }
+        }
+        still_moving
+    }
+
+    /// Render phase — draw all dirty surfaces.
+    pub fn render(&self, absolute_time: f32) {
+        for entry in &self.surfaces {
+            if !entry.dirty.get() || entry.renderer.is_none() {
+                continue;
+            }
+            let renderer = entry.renderer.as_ref().unwrap();
+            renderer.make_current();
+            let ctx = entry.render_context(self, absolute_time);
+            let canvas = Canvas::new(renderer.rect_program());
+            renderer.render_frame(&ctx, || {
+                draw_elements(&entry.elements, &canvas, &ctx);
+            });
+        }
+    }
+
     pub fn handle_click(&self) {
         let id = match self.focused_surface {
             Some(id) => id,
@@ -59,7 +114,12 @@ impl ShellState {
             Some(s) => s,
             None => return,
         };
-        let ctx = surface.render_context(self);
+        let ctx = RenderContext {
+            state: self,
+            surface_w: surface.kind.dimensions().0 as f32,
+            surface_h: surface.kind.dimensions().1 as f32,
+            absolute_time: 0.0,
+        };
         surface.on_click(x, y, &ctx);
     }
 

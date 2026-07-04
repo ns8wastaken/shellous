@@ -33,8 +33,8 @@ use crate::shell::surface_id::SurfaceId;
 /// Dispatch impls below send events into `ShellState`.
 pub struct WaylandState {
     pub conn: Connection,
-    event_queue: EventQueue<ShellState>,
-    qh: QueueHandle<ShellState>,
+    pub event_queue: EventQueue<ShellState>,
+    pub qh: QueueHandle<ShellState>,
     pub layer_shell: ZwlrLayerShellV1,
     pub xdg_wm_base: XdgWmBase,
     pub wl_compositor: WlCompositor,

@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::os::unix::io::RawFd;
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -28,9 +29,6 @@ struct ActiveWorkspace {
 
 // ==================== HYPRLAND COMPOSITOR ====================
 
-/// RAII guard that decrements `listener_count` when the listener thread
-/// exits (panic or normal). Each spawned thread installs one at entry so
-/// the next subscriber can detect a dead listener and respawn.
 struct ListenerIncarnation {
     count: Arc<AtomicUsize>,
 }
@@ -40,17 +38,13 @@ impl Drop for ListenerIncarnation {
     }
 }
 
-/// Hyprland implementation of the `Compositor` trait. Holds the paths to
-/// the command and event sockets, keyed subscription map, and a counter
-/// tracking whether a listener thread is currently alive.
 pub struct HyprlandCompositor {
     cmd_socket: String,
     evt_socket: String,
     subs: Mutex<HashMap<SubscriptionId, StateCallback>>,
-    /// Number of listener threads currently alive. Mutated atomically.
     listener_count: Arc<AtomicUsize>,
-    /// Monotonically increasing SubscriptionId source.
     next_sub_id: AtomicU64,
+    wake_fd: RawFd,
 }
 
 impl HyprlandCompositor {
@@ -58,12 +52,17 @@ impl HyprlandCompositor {
         let sig = std::env::var("HYPRLAND_INSTANCE_SIGNATURE")
             .expect("HYPRLAND_INSTANCE_SIGNATURE not set -- is this running under Hyprland?");
         let runtime = std::env::var("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR not set");
+
+        let wake_fd = unsafe { libc::eventfd(0, libc::EFD_NONBLOCK | libc::EFD_CLOEXEC) };
+        assert!(wake_fd >= 0, "eventfd creation failed");
+
         Self {
             cmd_socket: format!("{runtime}/hypr/{sig}/.socket.sock"),
             evt_socket: format!("{runtime}/hypr/{sig}/.socket2.sock"),
             subs: Mutex::new(HashMap::new()),
             listener_count: Arc::new(AtomicUsize::new(0)),
             next_sub_id: AtomicU64::new(1),
+            wake_fd,
         }
     }
 
@@ -77,9 +76,6 @@ impl HyprlandCompositor {
     }
 
     fn run_listener(self: Arc<Self>) {
-        // Install the increment/decrement guard for the lifetime of this
-        // thread. If we panic, the guard still runs in Drop and decrements
-        // the counter so the next subscriber can respawn.
         let _guard = ListenerIncarnation {
             count: Arc::clone(&self.listener_count),
         };
@@ -104,19 +100,11 @@ impl HyprlandCompositor {
                         let Ok(line) = line else { break };
 
                         if is_target_event(&line) {
-                            // Build the event ONCE; clone for each
-                            // subscriber. `CompositorEvent` is `Clone`.
                             let event = CompositorEvent::WorkspaceChanged {
                                 workspaces: self.workspaces(),
                                 active_id: self.active_workspace(),
                             };
 
-                            // Snapshot IDs under brief lock, then re-acquire
-                            // the lock per callback to extract the `Arc`
-                            // invocation target. Panics inside a callback
-                            // (or unsubscribe-from-callback calls) happen
-                            // outside the lock, so the `subs` mutex can
-                            // never be poisoned by a subscriber.
                             let ids: Vec<SubscriptionId> = self
                                 .subs
                                 .lock()
@@ -130,6 +118,16 @@ impl HyprlandCompositor {
                                     cb(event.clone());
                                 }
                             }
+
+                            // Wake the main thread
+                            let val: u64 = 1;
+                            unsafe {
+                                libc::write(
+                                    self.wake_fd,
+                                    &val as *const u64 as *const std::ffi::c_void,
+                                    8,
+                                );
+                            }
                         }
                     }
                 }
@@ -140,6 +138,12 @@ impl HyprlandCompositor {
 
             thread::sleep(Duration::from_millis(100));
         }
+    }
+}
+
+impl Drop for HyprlandCompositor {
+    fn drop(&mut self) {
+        unsafe { libc::close(self.wake_fd); }
     }
 }
 
@@ -202,11 +206,6 @@ impl Compositor for HyprlandCompositor {
         let id = SubscriptionId(self.next_sub_id.fetch_add(1, Ordering::SeqCst));
         self.subs.lock().unwrap().insert(id, callback);
 
-        // Spawn the listener thread iff none is currently alive. The
-        // Drop guard on the listener ensures the count returns to 0 if
-        // the thread exits, so a future subscriber can respawn. Two
-        // concurrent first-time subscribers both observe `prev == 0`
-        // and 1 respectively — only one spawns.
         let prev = self.listener_count.fetch_add(1, Ordering::AcqRel);
         if prev == 0 {
             let me = Arc::clone(&self);
@@ -217,5 +216,9 @@ impl Compositor for HyprlandCompositor {
 
     fn unsubscribe(&self, id: SubscriptionId) -> bool {
         self.subs.lock().unwrap().remove(&id).is_some()
+    }
+
+    fn wake_fd(&self) -> RawFd {
+        self.wake_fd
     }
 }

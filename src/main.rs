@@ -1,15 +1,16 @@
-mod canvas;
+#![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+
 mod components;
-mod hyprland;
 mod renderer;
 mod services;
 mod shell;
-mod ui;
 
 use std::sync::Arc;
 
 use crate::components::bar;
-use crate::hyprland::HyprlandCompositor;
+use crate::services::hyprland::HyprlandCompositor;
 use crate::shell::compositor::Compositor;
 use crate::shell::runtime::Shell;
 

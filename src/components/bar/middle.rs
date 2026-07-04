@@ -1,8 +1,8 @@
-use crate::canvas::DrawingSurface;
+use crate::components::canvas::DrawingSurface;
+use crate::components::ui::{Element, RenderContext};
 use crate::renderer::programs::rect::{
     Color, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
-use crate::ui::{Element, RenderContext};
 
 pub struct MiddlePanel {
     pub width: f32,

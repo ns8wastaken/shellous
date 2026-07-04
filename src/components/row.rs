@@ -1,5 +1,5 @@
-use crate::canvas::{DrawingSurface, TranslatedCanvas};
-use crate::ui::{Element, RenderContext};
+use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::components::ui::{Element, RenderContext};
 
 // ==================== ROW ====================
 

@@ -28,7 +28,6 @@ Shellous draws a custom top bar on Hyprland that shows workspace indicators (lef
 | `src/canvas.rs` | `Canvas` — drawing surface that wraps shader programs for UI elements |
 | `src/components/bar/` | Concrete UI widgets: `LeftPanel` (workspace indicators), `MiddlePanel` (centered). Constructs `SurfaceSpec::Layer`. |
 | `src/hyprland.rs` | `HyprlandCompositor` — Hyprland IPC via Unix sockets; implements `Compositor` trait with multi-subscriber support, typed event emission, lazy-spawned listener thread with resurrect-on-panic |
-| `src/workspace.rs` | `Workspace` + `WorkspaceState` — compositor-agnostic types shared between bar and compositor backend |
 | `src/main.rs` | Entry point: wires compositor, shell, and bar together |
 
 ## Key Dependencies

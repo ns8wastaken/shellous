@@ -32,7 +32,6 @@ main.rs
   ├── ui.rs                     — Element trait, RenderContext, draw/click dispatch helpers
   ├── canvas.rs                 — Canvas drawing surface abstraction
   ├── hyprland.rs               — HyprlandCompositor (Unix socket IPC, impls Compositor)
-  ├── workspace.rs              — Workspace / WorkspaceState types (compositor-agnostic)
   └── components/bar/
         ├── mod.rs              — mount() — composes SurfaceSpec::Layer
         ├── left.rs             — LeftPanel (workspace indicators)

@@ -2,12 +2,12 @@ use std::cell::Cell;
 
 use wayland_client::QueueHandle;
 
-use crate::canvas::Canvas;
+use crate::components::canvas::Canvas;
+use crate::components::ui::{Element, RenderContext, click_elements, draw_elements, tick_elements};
 use crate::renderer::Renderer;
 use crate::shell::state::ShellState;
 use crate::shell::surface::{Surface, SurfaceKind};
 use crate::shell::surface_id::SurfaceId;
-use crate::ui::{Element, RenderContext, click_elements, draw_elements};
 
 pub struct ManagedSurface {
     pub id: SurfaceId,
@@ -19,15 +19,22 @@ pub struct ManagedSurface {
 }
 
 impl ManagedSurface {
-    pub fn render_context<'a>(&self, state: &'a ShellState) -> RenderContext<'a> {
+    pub fn render_context<'a>(
+        &self,
+        state: &'a ShellState,
+        absolute_time: f32,
+    ) -> RenderContext<'a> {
         let (w, h) = self.kind.dimensions();
         RenderContext {
             state,
-            surface_id: self.id,
             surface_w: w as f32,
             surface_h: h as f32,
-            pointer_pos: state.pointer_pos_for(self.id),
+            absolute_time,
         }
+    }
+
+    pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
+        tick_elements(&mut self.elements, absolute_time)
     }
 
     pub fn request_frame(&self, qh: &QueueHandle<ShellState>) {

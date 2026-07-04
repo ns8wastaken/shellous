@@ -1,3 +1,4 @@
+use std::os::unix::io::RawFd;
 use std::sync::{Arc, Mutex};
 
 use crate::services::workspace::{Workspace, WorkspaceState};
@@ -49,6 +50,13 @@ pub trait Compositor: Send + Sync {
 
     /// Remove a callback by ID. Returns `true` if an entry was removed.
     fn unsubscribe(&self, id: SubscriptionId) -> bool;
+
+    /// Returns a file descriptor that becomes readable when the compositor
+    /// dispatches a workspace-change event. The render loop polls this fd
+    /// alongside the Wayland connection to wake from idle.
+    fn wake_fd(&self) -> RawFd {
+        -1
+    }
 
     /// Pull latest state from the compositor and write it into `state`.
     /// Used for initial hydration; subscribers keep state fresh from

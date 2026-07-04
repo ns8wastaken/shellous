@@ -4,7 +4,7 @@ use wayland_egl::WlEglSurface;
 use wayland_client::Proxy;
 
 use crate::shell::egl::EglState;
-use crate::ui::RenderContext;
+use crate::components::ui::RenderContext;
 
 // ==================== RENDERER ====================
 
