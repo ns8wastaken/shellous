@@ -25,7 +25,7 @@ pub struct LayerSpec {
     pub height: i32,
     pub exclusive_zone: i32,
     pub layer: ShellLayer,
-    pub elements: Vec<Box<dyn Element>>,
+    pub root: Option<Box<dyn Element>>,
 }
 
 pub struct ToplevelSpec {
@@ -33,7 +33,7 @@ pub struct ToplevelSpec {
     pub app_id: String,
     pub min_size: Option<(i32, i32)>,
     pub max_size: Option<(i32, i32)>,
-    pub elements: Vec<Box<dyn Element>>,
+    pub root: Option<Box<dyn Element>>,
 }
 
 pub enum SurfaceSpec {
@@ -77,7 +77,7 @@ impl Shell {
         let id = self.state.next_id;
         self.state.next_id += 1;
 
-        let (kind, elements): (SurfaceKind, Vec<Box<dyn Element>>) = match config {
+        let (kind, root): (SurfaceKind, Option<Box<dyn Element>>) = match config {
             SurfaceSpec::Layer(spec) => {
                 let layer_surface = LayerSurface::new(
                     &self.wayland,
@@ -90,7 +90,7 @@ impl Shell {
                     spec.exclusive_zone,
                 );
                 layer_surface.wl_surface.commit();
-                (SurfaceKind::Layer(layer_surface), spec.elements)
+                (SurfaceKind::Layer(layer_surface), spec.root)
             }
             SurfaceSpec::Toplevel(spec) => {
                 let xdg_surface = XdgToplevelSurface::new(
@@ -106,13 +106,13 @@ impl Shell {
                     xdg_surface.xdg_toplevel.set_max_size(w, h);
                 }
                 xdg_surface.wl_surface.commit();
-                (SurfaceKind::Toplevel(xdg_surface), spec.elements)
+                (SurfaceKind::Toplevel(xdg_surface), spec.root)
             }
         };
 
         self.state.register(ManagedSurface {
             id,
-            elements,
+            root,
             kind,
             renderer: None,
             frame_pending: Cell::new(false),

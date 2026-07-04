@@ -31,35 +31,3 @@ pub trait Element {
         (0.0, 0.0)
     }
 }
-
-// ==================== HELPERS ====================
-
-pub fn tick_elements(elements: &mut [Box<dyn Element>], absolute_time: f32) -> bool {
-    let mut active = false;
-    for e in elements.iter_mut() {
-        if e.tick_animations(absolute_time) {
-            active = true;
-        }
-    }
-    active
-}
-
-pub fn draw_elements(
-    elements: &[Box<dyn Element>],
-    surface: &dyn DrawingSurface,
-    ctx: &RenderContext,
-) {
-    for element in elements {
-        element.draw(surface, ctx);
-    }
-}
-
-/// Iterates elements in reverse z-order (last-drawn = topmost for clicks).
-/// Stops at the first element that returns `true` from `on_click`.
-pub fn click_elements(elements: &[Box<dyn Element>], x: f32, y: f32, ctx: &RenderContext) {
-    for element in elements.iter().rev() {
-        if element.on_click(x, y, ctx) {
-            return;
-        }
-    }
-}

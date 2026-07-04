@@ -62,6 +62,16 @@ impl Row {
 }
 
 impl Element for Row {
+    fn tick_animations(&mut self, absolute_time: f32) -> bool {
+        let mut active = false;
+        for child in &mut self.children {
+            if child.tick_animations(absolute_time) {
+                active = true;
+            }
+        }
+        active
+    }
+
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
         let mut cx = self.x;
         for child in &self.children {

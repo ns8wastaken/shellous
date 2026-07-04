@@ -3,7 +3,7 @@ use std::cell::Cell;
 use wayland_client::QueueHandle;
 
 use crate::components::canvas::Canvas;
-use crate::components::ui::{Element, RenderContext, click_elements, draw_elements, tick_elements};
+use crate::components::ui::{Element, RenderContext};
 use crate::renderer::Renderer;
 use crate::shell::state::ShellState;
 use crate::shell::surface::{Surface, SurfaceKind};
@@ -11,7 +11,7 @@ use crate::shell::surface_id::SurfaceId;
 
 pub struct ManagedSurface {
     pub id: SurfaceId,
-    pub elements: Vec<Box<dyn Element>>,
+    pub root: Option<Box<dyn Element>>,
     pub kind: SurfaceKind,
     pub renderer: Option<Renderer>,
     pub frame_pending: Cell<bool>,
@@ -34,7 +34,9 @@ impl ManagedSurface {
     }
 
     pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        tick_elements(&mut self.elements, absolute_time)
+        self.root
+            .as_mut()
+            .map_or(false, |r| r.tick_animations(absolute_time))
     }
 
     pub fn request_frame(&self, qh: &QueueHandle<ShellState>) {
@@ -45,10 +47,14 @@ impl ManagedSurface {
     }
 
     pub fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
-        draw_elements(&self.elements, canvas, ctx);
+        if let Some(ref root) = self.root {
+            root.draw(canvas, ctx);
+        }
     }
 
     pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) {
-        click_elements(&self.elements, x, y, ctx);
+        if let Some(ref root) = self.root {
+            root.on_click(x, y, ctx);
+        }
     }
 }

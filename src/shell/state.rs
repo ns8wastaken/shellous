@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use crate::components::canvas::Canvas;
-use crate::components::ui::{draw_elements, RenderContext};
+use crate::components::ui::RenderContext;
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface::Surface;
@@ -97,7 +97,7 @@ impl ShellState {
             let ctx = entry.render_context(self, absolute_time);
             let canvas = Canvas::new(renderer.rect_program());
             renderer.render_frame(&ctx, || {
-                draw_elements(&entry.elements, &canvas, &ctx);
+                entry.draw(&canvas, &ctx);
             });
         }
     }
