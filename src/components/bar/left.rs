@@ -1,4 +1,3 @@
-use crate::components::bar::state;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
 };
@@ -8,6 +7,13 @@ const WORKSPACE_SPACING: f32 = 8.0;
 const WORKSPACE_R: f32 = 6.0;
 const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
 const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
+const PANEL_OFFSET_Y: f32 = 18.0;
+const START_X: f32 = 18.0;
+
+/// Returns the x-center of the workspace indicator at the given index.
+fn workspace_elem_x(index: usize) -> f32 {
+    START_X + (WORKSPACE_SPACING + WORKSPACE_INACTIVE_W) * index as f32
+}
 
 pub struct LeftPanel {
     pub width: f32,
@@ -32,14 +38,13 @@ impl Element for LeftPanel {
             (bar.workspaces.len(), active_slot)
         };
 
-        let panel_h = ctx.surface_h - 18.0;
+        let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
 
         draw_background(rect, ctx.surface_w, ctx.surface_h, panel_h, self.width);
         draw_workspace_indicators(
             rect,
             ctx.surface_w,
             ctx.surface_h,
-            self.width,
             panel_h,
             ws_count,
             active_slot,
@@ -47,21 +52,22 @@ impl Element for LeftPanel {
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
+        let cy = panel_h * 0.5;
+        let hw = (WORKSPACE_SPACING + WORKSPACE_INACTIVE_W) * 0.5;
+        let hh = WORKSPACE_R + 2.0;
+
         let bar = ctx.state.bar.lock().unwrap();
-        let ws_count = bar.workspaces.len();
-        let buttons = state::button_layout(ws_count, ctx.surface_h);
-
-        let ws_id = state::hit_test(&buttons, x, y)
-            .map(|idx| bar.workspaces[idx].id);
-        drop(bar);
-
-        match ws_id {
-            Some(id) => {
+        for i in 0..bar.workspaces.len() {
+            let cx = workspace_elem_x(i);
+            if x >= cx - hw && x <= cx + hw && y >= cy - hh && y <= cy + hh {
+                let id = bar.workspaces[i].id;
+                drop(bar);
                 ctx.state.compositor.switch_workspace(id);
-                true
+                return true;
             }
-            None => false,
         }
+        false
     }
 }
 
@@ -117,7 +123,6 @@ fn draw_workspace_indicators(
     rect: &RectProgram,
     surface_w: f32,
     surface_h: f32,
-    panel_w: f32,
     panel_h: f32,
     ws_count: usize,
     active_slot: i32,
@@ -125,27 +130,12 @@ fn draw_workspace_indicators(
     let elem_y = panel_h * 0.5;
 
     for i in 0..ws_count {
-        let elem_x = 18.0 + (WORKSPACE_SPACING + WORKSPACE_INACTIVE_W) * i as f32;
-
-        // if elem_x + CAP_HALF + CAP_R > panel_w {
-        //     break;
-        // }
+        let elem_x = workspace_elem_x(i);
 
         if i as i32 == active_slot {
-            draw_active_indicator(
-                rect, surface_w,
-                surface_h,
-                elem_x,
-                elem_y,
-            );
+            draw_active_indicator(rect, surface_w, surface_h, elem_x, elem_y);
         } else {
-            draw_inactive_indicator(
-                rect,
-                surface_w,
-                surface_h,
-                elem_x,
-                elem_y,
-            );
+            draw_inactive_indicator(rect, surface_w, surface_h, elem_x, elem_y);
         }
     }
 }

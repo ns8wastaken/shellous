@@ -3,10 +3,8 @@ mod middle;
 mod state;
 
 use std::sync::Arc;
-use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::Anchor,
-};
 
+use crate::shell::layer_surface::{ShellAnchor, ShellLayer};
 use crate::shell::runtime::{Shell, SurfaceSpec};
 
 pub use state::{BarState, Workspace};
@@ -16,11 +14,11 @@ use middle::MiddlePanel;
 fn surface() -> SurfaceSpec {
     SurfaceSpec {
         namespace: "shellous:bar".into(),
-        anchor: Anchor::Top | Anchor::Left | Anchor::Right,
+        anchor: ShellAnchor::TOP | ShellAnchor::LEFT | ShellAnchor::RIGHT,
         width: 0,
         height: 36 + 18,
         exclusive_zone: 36,
-        layer: Layer::Top,
+        layer: ShellLayer::Top,
         elements: vec![
             Box::new(LeftPanel::default()),
             Box::new(MiddlePanel::default()),

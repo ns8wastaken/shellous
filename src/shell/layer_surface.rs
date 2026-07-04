@@ -7,11 +7,58 @@ use wayland_client::{
 };
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
-    zwlr_layer_surface_v1::ZwlrLayerSurfaceV1,
+    zwlr_layer_surface_v1::{Anchor, ZwlrLayerSurfaceV1},
 };
 
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
+
+// ==================== SHELL-LEVEL WRAPPER TYPES ====================
+
+/// Shell-level layer ordering, mirrors `zwlr_layer_shell_v1::Layer`.
+/// Components use this instead of importing wayland protocol types directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellLayer {
+    Background,
+    Bottom,
+    Top,
+    Overlay,
+}
+
+impl ShellLayer {
+    pub(crate) fn to_wayland(self) -> Layer {
+        match self {
+            ShellLayer::Background => Layer::Background,
+            ShellLayer::Bottom     => Layer::Bottom,
+            ShellLayer::Top        => Layer::Top,
+            ShellLayer::Overlay    => Layer::Overlay,
+        }
+    }
+}
+
+/// Shell-level anchor bit-flag, mirrors `zwlr_layer_surface_v1::Anchor`.
+#[derive(Debug, Clone, Copy)]
+pub struct ShellAnchor(u32);
+
+impl ShellAnchor {
+    pub const TOP: ShellAnchor    = ShellAnchor(1);
+    pub const BOTTOM: ShellAnchor = ShellAnchor(2);
+    pub const LEFT: ShellAnchor   = ShellAnchor(4);
+    pub const RIGHT: ShellAnchor  = ShellAnchor(8);
+
+    pub(crate) fn to_wayland(self) -> Anchor {
+        Anchor::from_bits_truncate(self.0)
+    }
+}
+
+impl std::ops::BitOr for ShellAnchor {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        ShellAnchor(self.0 | rhs.0)
+    }
+}
+
+// ==================== SURFACE STATE ====================
 
 pub struct SurfaceState {
     pub configured: bool,

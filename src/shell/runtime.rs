@@ -1,15 +1,11 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
-use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::Anchor,
-};
-
 use crate::components::bar::BarState;
 use crate::renderer::Renderer;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
-use crate::shell::layer_surface::{LayerSurface, WaylandState};
+use crate::shell::layer_surface::{LayerSurface, ShellAnchor, ShellLayer, WaylandState};
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
@@ -17,11 +13,11 @@ use crate::ui::Element;
 
 pub struct SurfaceSpec {
     pub namespace: String,
-    pub anchor: Anchor,
+    pub anchor: ShellAnchor,
     pub width: i32,
     pub height: i32,
     pub exclusive_zone: i32,
-    pub layer: Layer,
+    pub layer: ShellLayer,
     pub elements: Vec<Box<dyn Element>>,
 }
 
@@ -55,10 +51,13 @@ impl Shell {
         let id = self.state.next_id;
         self.state.next_id += 1;
 
-        let (layer, wl_surface) =
-            LayerSurface::new(&self.wayland, &config.namespace, id, config.layer);
+        let wayland_layer = config.layer.to_wayland();
+        let wayland_anchor = config.anchor.to_wayland();
 
-        layer.layer_surface.set_anchor(config.anchor);
+        let (layer, wl_surface) =
+            LayerSurface::new(&self.wayland, &config.namespace, id, wayland_layer);
+
+        layer.layer_surface.set_anchor(wayland_anchor);
         layer
             .layer_surface
             .set_size(config.width as u32, config.height as u32);
