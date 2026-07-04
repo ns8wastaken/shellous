@@ -3,14 +3,16 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Easing {
     Linear,
+    EaseOutCubic,
     EaseOutQuad,
 }
 
 impl Easing {
     pub fn apply(&self, t: f32) -> f32 {
         match self {
-            Self::Linear => t,
-            Self::EaseOutQuad => 1.0 - (1.0 - t) * (1.0 - t),
+            Self::Linear       => t,
+            Self::EaseOutCubic => 1.0 - (1.0 - t).powf(3.0),
+            Self::EaseOutQuad  => 1.0 - (1.0 - t) * (1.0 - t),
         }
     }
 }

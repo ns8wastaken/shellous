@@ -1,6 +1,7 @@
 use crate::components::canvas::DrawingSurface;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
+use crate::renderer::animation::easing::Easing;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
@@ -48,7 +49,9 @@ impl WorkspaceDot {
         let initial = if is_active { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
         Self {
             workspace_id,
-            width: Animated::new(initial),
+            width: Animated::new(initial)
+                .with_duration(0.26)
+                .with_easing(Easing::EaseOutCubic),
         }
     }
 }

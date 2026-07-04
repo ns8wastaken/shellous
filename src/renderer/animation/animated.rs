@@ -37,19 +37,18 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
             start_value: value,
             start_time: 0.0,
             duration_secs: 0.2,
-            easing: Easing::EaseOutQuad,
+            easing: Easing::Linear,
         }
     }
 
-    pub fn new_duration(value: T, duration_secs: f32, easing: Easing) -> Self {
-        Self {
-            current: value,
-            target: value,
-            start_value: value,
-            start_time: 0.0,
-            duration_secs,
-            easing,
-        }
+    pub fn with_duration(mut self, duration: f32) -> Self {
+        self.duration_secs = duration;
+        self
+    }
+
+    pub fn with_easing(mut self, easing: Easing) -> Self {
+        self.easing = easing;
+        self
     }
 
     pub fn set_target(&mut self, target: T, now: f32) {
@@ -58,7 +57,7 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
             self.current = target;
             self.target = target;
             self.start_value = target;
-            self.start_time = now - self.duration_secs;
+            self.start_time = now;
             return;
         }
         self.current = from;
