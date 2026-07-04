@@ -4,7 +4,7 @@ use crate::renderer::programs::rect::{
 use crate::ui::{Element, RenderContext};
 
 const WORKSPACE_SPACING: f32 = 8.0;
-const WORKSPACE_R: f32 = 6.0;
+const WORKSPACE_R: f32 = 5.5;
 const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
 const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
 const PANEL_OFFSET_Y: f32 = 18.0;
@@ -54,13 +54,12 @@ impl Element for LeftPanel {
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
         let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
         let cy = panel_h * 0.5;
-        let hw = (WORKSPACE_SPACING + WORKSPACE_INACTIVE_W) * 0.5;
         let hh = WORKSPACE_R + 2.0;
 
         let bar = ctx.state.bar.lock().unwrap();
         for i in 0..bar.workspaces.len() {
             let cx = workspace_elem_x(i);
-            if x >= cx - hw && x <= cx + hw && y >= cy - hh && y <= cy + hh {
+            if x >= cx && x <= cx + WORKSPACE_INACTIVE_W && y >= cy - hh && y <= cy + hh {
                 let id = bar.workspaces[i].id;
                 drop(bar);
                 ctx.state.compositor.switch_workspace(id);
@@ -78,8 +77,8 @@ fn draw_active_indicator(
     elem_x: f32,
     elem_y: f32,
 ) {
-    let inner_style = RectStyle {
-        fill: Color { r: 0.10, g: 0.12, b: 0.14, a: 0.5 },
+    let style = RectStyle {
+        fill: Color { r: 0.10, g: 0.12, b: 0.14, a: 1.0 },
         fill_mode: FillMode::Solid,
         radius: Corners { tl: WORKSPACE_R, tr: WORKSPACE_R, br: WORKSPACE_R, bl: WORKSPACE_R },
         softness: 0.85,
@@ -90,8 +89,8 @@ fn draw_active_indicator(
         surface_h,
         WORKSPACE_ACTIVE_W,
         WORKSPACE_R * 2.0,
-        &inner_style,
-        Mat3::translation(elem_x - WORKSPACE_ACTIVE_W * 0.5, elem_y - WORKSPACE_ACTIVE_W * 0.5),
+        &style,
+        Mat3::translation(elem_x, elem_y - WORKSPACE_R),
     );
 }
 
@@ -115,7 +114,7 @@ fn draw_inactive_indicator(
         WORKSPACE_INACTIVE_W,
         WORKSPACE_INACTIVE_W,
         &style,
-        Mat3::translation(elem_x - WORKSPACE_R, elem_y - WORKSPACE_R)
+        Mat3::translation(elem_x, elem_y - WORKSPACE_R)
     );
 }
 
