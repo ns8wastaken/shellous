@@ -38,7 +38,6 @@ pub struct ToplevelSpec {
 
 pub enum SurfaceSpec {
     Layer(LayerSpec),
-    #[allow(dead_code)]
     Toplevel(ToplevelSpec),
 }
 

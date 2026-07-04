@@ -27,6 +27,10 @@ pub trait Element {
         false
     }
 
+    fn id(&self) -> Option<i32> {
+        None
+    }
+
     fn size(&self) -> (f32, f32) {
         (0.0, 0.0)
     }

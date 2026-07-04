@@ -59,6 +59,18 @@ impl Row {
         self.children.push(child);
         self
     }
+
+    pub fn children(&self) -> &[Box<dyn Element>] {
+        &self.children
+    }
+
+    pub fn children_mut(&mut self) -> &mut Vec<Box<dyn Element>> {
+        &mut self.children
+    }
+
+    pub fn push(&mut self, child: Box<dyn Element>) {
+        self.children.push(child);
+    }
 }
 
 impl Element for Row {
