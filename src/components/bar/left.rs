@@ -1,5 +1,5 @@
 use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
-use crate::components::row::Row;
+use crate::components::layout::row::Row;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
@@ -159,7 +159,7 @@ impl Element for LeftPanel {
         let mut cur_ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
         cur_ids.sort_unstable();
         if cur_ids != self.prev_workspace_ids {
-            let old: Vec<Box<dyn Element>> = self.row.children_mut().drain(..).collect();
+            let old: Vec<Box<dyn Element>> = self.row.children.drain(..).collect();
             let mut by_id: Vec<(i32, Box<dyn Element>)> = old
                 .into_iter()
                 .filter_map(|c| c.id().map(|id| (id, c)))
@@ -211,6 +211,7 @@ fn draw_background(
     panel_h: f32,
     panel_w: f32,
 ) {
+    let r = panel_h * 0.5;
     let style = RectStyle {
         fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
         fill_mode: FillMode::Solid,
@@ -220,8 +221,8 @@ fn draw_background(
             br: CornerShape::Convex,
             bl: CornerShape::Concave,
         },
-        radius: Corners { tl: 0.0, tr: 12.0, br: 12.0, bl: 18.0 },
-        logical_inset: LogicalInset { right: 12.0, bottom: 18.0, ..Default::default() },
+        radius: Corners { tl: 0.0, tr: r, br: r, bl: 18.0 },
+        logical_inset: LogicalInset { right: r, bottom: 18.0, ..Default::default() },
         ..Default::default()
     };
     surface.draw_rect(
