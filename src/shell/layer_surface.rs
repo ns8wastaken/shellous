@@ -104,8 +104,14 @@ impl WaylandState {
         }
     }
 
-    pub fn dispatch(&mut self, state: &mut ShellState) {
-        self.event_queue.roundtrip(state).unwrap();
+    /// Non-blocking: dispatch any events already buffered.
+    pub fn dispatch_pending(&mut self, state: &mut ShellState) {
+        self.event_queue.dispatch_pending(state).unwrap();
+    }
+
+    /// Block until the next Wayland event arrives, then dispatch it.
+    pub fn blocking_dispatch(&mut self, state: &mut ShellState) {
+        self.event_queue.blocking_dispatch(state).unwrap();
     }
 
     pub fn qh(&self) -> &QueueHandle<ShellState> {

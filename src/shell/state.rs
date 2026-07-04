@@ -9,7 +9,7 @@ pub struct ShellState {
     pub bar: Arc<Mutex<BarState>>,
     pub compositor: Arc<dyn Compositor>,
     pub surfaces: Vec<ManagedSurface>,
-    pub focused_surface: Option<usize>,
+    pub focused_surface: Option<SurfaceId>,
     pub pointer_pos: Option<(f64, f64)>,
     pub next_id: SurfaceId,
 }
@@ -45,14 +45,14 @@ impl ShellState {
 
     pub fn pointer_pos_for(&self, id: SurfaceId) -> Option<(f64, f64)> {
         match self.focused_surface {
-            Some(focused_idx) if self.surfaces.get(focused_idx)?.id == id => self.pointer_pos,
+            Some(focused_id) if focused_id == id => self.pointer_pos,
             _ => None,
         }
     }
 
     pub fn handle_click(&self) {
-        let idx = match self.focused_surface {
-            Some(i) => i,
+        let id = match self.focused_surface {
+            Some(id) => id,
             None => return,
         };
         let (x, y) = match self.pointer_pos {
@@ -60,7 +60,10 @@ impl ShellState {
             None => return,
         };
 
-        let surface = &self.surfaces[idx];
+        let surface = match self.find_surface(id) {
+            Some(s) => s,
+            None => return,
+        };
         let ctx = surface.render_context(self);
         surface.on_click(x, y, &ctx);
     }
@@ -69,11 +72,12 @@ impl ShellState {
         &mut self,
         wl_surface: &wayland_client::protocol::wl_surface::WlSurface,
     ) {
-        self.focused_surface = self.surfaces.iter().position(|s| s.wl_surface == *wl_surface);
-        eprintln!(
-            "[shell] focus -> surface {:?}",
-            self.focused_surface.map(|i| self.surfaces[i].id)
-        );
+        self.focused_surface = self
+            .surfaces
+            .iter()
+            .find(|s| s.wl_surface == *wl_surface)
+            .map(|s| s.id);
+        eprintln!("[shell] focus -> surface {:?}", self.focused_surface);
     }
 
 

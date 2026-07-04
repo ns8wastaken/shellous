@@ -1,5 +1,6 @@
+use crate::canvas::Canvas;
 use crate::renderer::programs::rect::{
-    Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
+    Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
 use crate::ui::{Element, RenderContext};
 
@@ -26,7 +27,7 @@ impl Default for LeftPanel {
 }
 
 impl Element for LeftPanel {
-    fn draw(&self, rect: &RectProgram, ctx: &RenderContext) {
+    fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
         let (ws_count, active_slot) = {
             let bar = ctx.state.bar.lock().unwrap();
             let active_slot = bar
@@ -40,9 +41,9 @@ impl Element for LeftPanel {
 
         let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
 
-        draw_background(rect, ctx.surface_w, ctx.surface_h, panel_h, self.width);
+        draw_background(canvas, ctx.surface_w, ctx.surface_h, panel_h, self.width);
         draw_workspace_indicators(
-            rect,
+            canvas,
             ctx.surface_w,
             ctx.surface_h,
             panel_h,
@@ -71,7 +72,7 @@ impl Element for LeftPanel {
 }
 
 fn draw_active_indicator(
-    rect: &RectProgram,
+    canvas: &Canvas,
     surface_w: f32,
     surface_h: f32,
     elem_x: f32,
@@ -84,7 +85,7 @@ fn draw_active_indicator(
         softness: 0.85,
         ..Default::default()
     };
-    rect.draw(
+    canvas.draw_rect(
         surface_w,
         surface_h,
         WORKSPACE_ACTIVE_W,
@@ -95,7 +96,7 @@ fn draw_active_indicator(
 }
 
 fn draw_inactive_indicator(
-    rect: &RectProgram,
+    canvas: &Canvas,
     surface_w: f32,
     surface_h: f32,
     elem_x: f32,
@@ -108,7 +109,7 @@ fn draw_inactive_indicator(
         softness: 0.85,
         ..Default::default()
     };
-    rect.draw(
+    canvas.draw_rect(
         surface_w,
         surface_h,
         WORKSPACE_INACTIVE_W,
@@ -119,7 +120,7 @@ fn draw_inactive_indicator(
 }
 
 fn draw_workspace_indicators(
-    rect: &RectProgram,
+    canvas: &Canvas,
     surface_w: f32,
     surface_h: f32,
     panel_h: f32,
@@ -132,15 +133,15 @@ fn draw_workspace_indicators(
         let elem_x = workspace_elem_x(i);
 
         if i as i32 == active_slot {
-            draw_active_indicator(rect, surface_w, surface_h, elem_x, elem_y);
+            draw_active_indicator(canvas, surface_w, surface_h, elem_x, elem_y);
         } else {
-            draw_inactive_indicator(rect, surface_w, surface_h, elem_x, elem_y);
+            draw_inactive_indicator(canvas, surface_w, surface_h, elem_x, elem_y);
         }
     }
 }
 
 fn draw_background(
-    rect: &RectProgram,
+    canvas: &Canvas,
     surface_w: f32,
     surface_h: f32,
     panel_h: f32,
@@ -159,7 +160,7 @@ fn draw_background(
         logical_inset: LogicalInset { right: 12.0, bottom: 18.0, ..Default::default() },
         ..Default::default()
     };
-    rect.draw(
+    canvas.draw_rect(
         surface_w,
         surface_h,
         panel_w,

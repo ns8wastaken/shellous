@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
+use crate::canvas::Canvas;
 use crate::components::bar::BarState;
 use crate::renderer::Renderer;
 use crate::shell::compositor::Compositor;
@@ -97,9 +98,11 @@ impl Shell {
 
     pub fn run(&mut self) {
         loop {
-            self.wayland.dispatch(&mut self.state);
-            let qh = self.wayland.qh().clone();
+            // 1. Process any already-buffered events (non-blocking)
+            self.wayland.dispatch_pending(&mut self.state);
 
+            // 2. Render all dirty surfaces
+            let qh = self.wayland.qh().clone();
             for entry in &self.state.surfaces {
                 if !entry.dirty.get() || entry.renderer.is_none() {
                     continue;
@@ -110,12 +113,16 @@ impl Shell {
                 let renderer = entry.renderer.as_ref().unwrap();
                 renderer.make_current();
                 let ctx = entry.render_context(&self.state);
+                let canvas = Canvas::new(renderer.rect_program());
                 renderer.render_frame(&ctx, || {
-                    entry.draw(renderer.rect_program(), &ctx);
+                    entry.draw(&canvas, &ctx);
                 });
 
                 entry.dirty.set(false);
             }
+
+            // 3. Flush and block until the next Wayland event arrives
+            self.wayland.blocking_dispatch(&mut self.state);
         }
     }
 }

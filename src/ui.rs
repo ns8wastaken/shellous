@@ -1,4 +1,4 @@
-use crate::renderer::programs::rect::RectProgram;
+use crate::canvas::Canvas;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
 
@@ -18,7 +18,7 @@ pub struct RenderContext<'a> {
 /// Return `true` if the click was handled (stops iteration over elements);
 /// return `false` to let the next element in z-order try.
 pub trait Element {
-    fn draw(&self, rect: &RectProgram, ctx: &RenderContext);
+    fn draw(&self, canvas: &Canvas, ctx: &RenderContext);
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
         let _ = (x, y, ctx);
@@ -28,9 +28,9 @@ pub trait Element {
 
 // ==================== HELPERS ====================
 
-pub fn draw_elements(elements: &[Box<dyn Element>], rect: &RectProgram, ctx: &RenderContext) {
+pub fn draw_elements(elements: &[Box<dyn Element>], canvas: &Canvas, ctx: &RenderContext) {
     for element in elements {
-        element.draw(rect, ctx);
+        element.draw(canvas, ctx);
     }
 }
 

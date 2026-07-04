@@ -3,8 +3,8 @@ use std::cell::Cell;
 use wayland_client::QueueHandle;
 use wayland_client::protocol::wl_surface::WlSurface;
 
+use crate::canvas::Canvas;
 use crate::renderer::Renderer;
-use crate::renderer::programs::rect::RectProgram;
 use crate::shell::layer_surface::LayerSurface;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
@@ -39,8 +39,8 @@ impl ManagedSurface {
         }
     }
 
-    pub fn draw(&self, rect: &RectProgram, ctx: &RenderContext) {
-        draw_elements(&self.elements, rect, ctx);
+    pub fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
+        draw_elements(&self.elements, canvas, ctx);
     }
 
     pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) {

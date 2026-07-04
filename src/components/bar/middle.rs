@@ -1,5 +1,6 @@
+use crate::canvas::Canvas;
 use crate::renderer::programs::rect::{
-    Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
+    Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
 use crate::ui::{Element, RenderContext};
 
@@ -14,15 +15,15 @@ impl Default for MiddlePanel {
 }
 
 impl Element for MiddlePanel {
-    fn draw(&self, rect: &RectProgram, ctx: &RenderContext) {
+    fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
         let panel_h = ctx.surface_h - 18.0;
         let x = ((ctx.surface_w - self.width) * 0.5).max(0.0);
-        draw_background(rect, ctx.surface_w, ctx.surface_h, panel_h, self.width, x);
+        draw_background(canvas, ctx.surface_w, ctx.surface_h, panel_h, self.width, x);
     }
 }
 
 fn draw_background(
-    rect: &RectProgram,
+    canvas: &Canvas,
     surface_w: f32,
     surface_h: f32,
     panel_h: f32,
@@ -42,7 +43,7 @@ fn draw_background(
         logical_inset: LogicalInset { right: 12.0, left: 12.0, ..Default::default() },
         ..Default::default()
     };
-    rect.draw(
+    canvas.draw_rect(
         surface_w,
         surface_h,
         panel_w,

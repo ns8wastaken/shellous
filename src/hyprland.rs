@@ -90,22 +90,16 @@ impl Compositor for HyprlandCompositor {
     }
 
     fn switch_workspace(&self, id: i32) {
-        let cmd_socket = self.cmd_socket.clone();
         let cmd = format!("dispatch hl.dsp.focus({{ workspace = {id} }})");
-        thread::spawn(move || {
-            let mut stream = match UnixStream::connect(&cmd_socket) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("[bar] switch to {id} FAILED: {e}");
-                    return;
-                }
-            };
-            let _ = stream.write_all(cmd.as_bytes());
-            let _ = stream.shutdown(std::net::Shutdown::Write);
-            let mut resp = String::new();
-            let _ = stream.read_to_string(&mut resp);
-            eprintln!("[bar] switch to {id}: {:?}", resp.trim());
-        });
+        match UnixStream::connect(&self.cmd_socket) {
+            Ok(mut stream) => {
+                let _ = stream.write_all(cmd.as_bytes());
+                let _ = stream.shutdown(std::net::Shutdown::Write);
+            }
+            Err(e) => {
+                eprintln!("[bar] switch to {id} FAILED: {e}");
+            }
+        }
     }
 
     fn spawn_event_listener(self: Arc<Self>, bar: Arc<Mutex<BarState>>) {

@@ -1,3 +1,4 @@
+mod canvas;
 mod components;
 mod hyprland;
 mod renderer;
