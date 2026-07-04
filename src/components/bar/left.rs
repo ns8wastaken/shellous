@@ -1,4 +1,5 @@
-use crate::canvas::Canvas;
+use crate::canvas::DrawingSurface;
+use crate::components::row::Row;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
@@ -12,9 +13,10 @@ const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
 const PANEL_OFFSET_Y: f32 = 18.0;
 const START_X: f32 = 18.0;
 
-/// Returns the x-center of the workspace indicator at the given index.
-fn workspace_elem_x(index: usize) -> f32 {
-    START_X + (WORKSPACE_SPACING + WORKSPACE_INACTIVE_W) * index as f32
+/// Vertical y for the indicator row: cell-local origin sits here such that
+/// the dot's geometric center lands on the panel's vertical midline.
+fn indicator_row_y(surface_h: f32) -> f32 {
+    (surface_h - PANEL_OFFSET_Y) * 0.5 - WORKSPACE_R
 }
 
 pub struct LeftPanel {
@@ -32,128 +34,106 @@ impl LeftPanel {
 }
 
 impl Element for LeftPanel {
-    fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
-        // Single snapshot keeps the count and active-slot index consistent.
+    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
         let snap = self.handle.snapshot();
-        let ws_count = snap.workspaces.len();
-        let active_slot = snap
-            .workspaces
-            .iter()
-            .position(|w| w.id == snap.active_id)
-            .map(|i| i as i32)
-            .unwrap_or(-1);
+        let active_idx = snap.workspaces.iter().position(|w| w.id == snap.active_id);
 
         let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
+        draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, self.width);
 
-        draw_background(canvas, ctx.surface_w, ctx.surface_h, panel_h, self.width);
-        draw_workspace_indicators(
-            canvas,
-            ctx.surface_w,
-            ctx.surface_h,
-            panel_h,
-            ws_count,
-            active_slot,
-        );
+        // Per-frame Row built from the snapshot; runs through clear-the-LineDrawOneForEachCell
+        // which advances the cursor by `cell.size().0 + spacing`. Each cell draws at its
+        // local origin (0, 0) — Row's TranslatedCanvas positions it correctly.
+        let mut row = Row::new()
+            .at(START_X, indicator_row_y(ctx.surface_h))
+            .spacing(WORKSPACE_SPACING);
+        for (i, ws) in snap.workspaces.iter().enumerate() {
+            row = row.add(Box::new(WorkspaceIndicatorCell {
+                workspace_id: ws.id,
+                is_active: active_idx == Some(i),
+            }));
+        }
+        row.draw(surface, ctx);
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
-        let cy = panel_h * 0.5;
-        let hh = WORKSPACE_R + 2.0;
+        // Reconstruct the same Row on click to leverage Row's cursor arithmetic —
+        // each cell's clicked bbox matches what was drawn.
+        let snap = self.handle.snapshot();
+        let active_idx = snap.workspaces.iter().position(|w| w.id == snap.active_id);
 
-        // Compute the target workspace id while holding the lock; the
-        // activation IPC is fine to run after the lock is dropped.
-        let target_id = self.handle.read(|s| {
-            s.workspaces
-                .iter()
-                .enumerate()
-                .find(|(i, _)| {
-                    let cx = workspace_elem_x(*i);
-                    x >= cx && x <= cx + WORKSPACE_INACTIVE_W
-                        && y >= cy - hh && y <= cy + hh
-                })
-                .map(|(_, w)| w.id)
-        });
-
-        if let Some(id) = target_id {
-            ctx.state.compositor.activate_workspace(id);
-            return true;
+        let mut row = Row::new()
+            .at(START_X, indicator_row_y(ctx.surface_h))
+            .spacing(WORKSPACE_SPACING);
+        for (i, ws) in snap.workspaces.iter().enumerate() {
+            row = row.add(Box::new(WorkspaceIndicatorCell {
+                workspace_id: ws.id,
+                is_active: active_idx == Some(i),
+            }));
         }
-        false
+        row.on_click(x, y, ctx)
     }
 }
 
-fn draw_active_indicator(
-    canvas: &Canvas,
-    surface_w: f32,
-    surface_h: f32,
-    elem_x: f32,
-    elem_y: f32,
-) {
-    let style = RectStyle {
-        fill: Color { r: 0.10, g: 0.12, b: 0.14, a: 1.0 },
-        fill_mode: FillMode::Solid,
-        radius: Corners { tl: WORKSPACE_R, tr: WORKSPACE_R, br: WORKSPACE_R, bl: WORKSPACE_R },
-        softness: 0.85,
-        ..Default::default()
-    };
-    canvas.draw_rect(
-        surface_w,
-        surface_h,
-        WORKSPACE_ACTIVE_W,
-        WORKSPACE_R * 2.0,
-        &style,
-        Mat3::translation(elem_x, elem_y - WORKSPACE_R),
-    );
+// ==================== WORKSPACE INDICATOR CELL ====================
+
+/// One row cell. Cell-local origin (0, 0) is where Row's TranslatedCanvas
+/// maps to on screen — the cell draws at identity.
+struct WorkspaceIndicatorCell {
+    workspace_id: i32,
+    is_active: bool,
 }
 
-fn draw_inactive_indicator(
-    canvas: &Canvas,
-    surface_w: f32,
-    surface_h: f32,
-    elem_x: f32,
-    elem_y: f32,
-) {
-    let style = RectStyle {
-        fill: Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 },
-        fill_mode: FillMode::Solid,
-        radius: Corners { tl: WORKSPACE_R, tr: WORKSPACE_R, br: WORKSPACE_R, bl: WORKSPACE_R },
-        softness: 0.85,
-        ..Default::default()
-    };
-    canvas.draw_rect(
-        surface_w,
-        surface_h,
-        WORKSPACE_INACTIVE_W,
-        WORKSPACE_INACTIVE_W,
-        &style,
-        Mat3::translation(elem_x, elem_y - WORKSPACE_R),
-    );
-}
-
-fn draw_workspace_indicators(
-    canvas: &Canvas,
-    surface_w: f32,
-    surface_h: f32,
-    panel_h: f32,
-    ws_count: usize,
-    active_slot: i32,
-) {
-    let elem_y = panel_h * 0.5;
-
-    for i in 0..ws_count {
-        let elem_x = workspace_elem_x(i);
-
-        if i as i32 == active_slot {
-            draw_active_indicator(canvas, surface_w, surface_h, elem_x, elem_y);
+impl WorkspaceIndicatorCell {
+    fn width(&self) -> f32 {
+        if self.is_active {
+            WORKSPACE_ACTIVE_W
         } else {
-            draw_inactive_indicator(canvas, surface_w, surface_h, elem_x, elem_y);
+            WORKSPACE_INACTIVE_W
         }
     }
 }
+
+impl Element for WorkspaceIndicatorCell {
+    fn size(&self) -> (f32, f32) {
+        (self.width(), WORKSPACE_R * 2.0)
+    }
+
+    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
+        let fill = if self.is_active {
+            Color { r: 0.10, g: 0.12, b: 0.14, a: 1.0 }
+        } else {
+            Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
+        };
+        let style = RectStyle {
+            fill,
+            fill_mode: FillMode::Solid,
+            radius: Corners {
+                tl: WORKSPACE_R, tr: WORKSPACE_R, br: WORKSPACE_R, bl: WORKSPACE_R,
+            },
+            softness: 0.85,
+            ..Default::default()
+        };
+        surface.draw_rect(
+            ctx.surface_w,
+            ctx.surface_h,
+            self.width(),
+            WORKSPACE_R * 2.0,
+            &style,
+            Mat3::identity(),
+        );
+    }
+
+    fn on_click(&self, _x: f32, _y: f32, ctx: &RenderContext) -> bool {
+        ctx.state.compositor.activate_workspace(self.workspace_id);
+        true
+    }
+}
+
+// ==================== PANEL BACKGROUND ====================
 
 fn draw_background(
-    canvas: &Canvas,
+    surface: &dyn DrawingSurface,
     surface_w: f32,
     surface_h: f32,
     panel_h: f32,
@@ -172,7 +152,7 @@ fn draw_background(
         logical_inset: LogicalInset { right: 12.0, bottom: 18.0, ..Default::default() },
         ..Default::default()
     };
-    canvas.draw_rect(
+    surface.draw_rect(
         surface_w,
         surface_h,
         panel_w,
