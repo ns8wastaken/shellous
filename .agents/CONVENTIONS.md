@@ -29,7 +29,7 @@
 - `Element` — dynamic dispatch for UI widgets (`Vec<Box<dyn Element>>`)
 
 ### Shared State via Arc<Mutex<>>
-- `BarState` shared between Hyprland listener thread and render thread
+- `WorkspaceState` shared between Hyprland listener thread and render thread
 - `SurfaceState` shared between Wayland dispatch and surface lifecycle
 
 ### Interior Mutability
@@ -37,8 +37,8 @@
 - `Mutex` for shared cross-thread state
 
 ### Default Trait
-- Used consistently for style structs (`RectStyle`, `Corners`, `Color`, `LeftPanel`, `MiddlePanel`)
-- Fallible construction uses `new()`, widgets use `Default`
+- Used consistently for style structs (`RectStyle`, `Corners`, `Color`, `MiddlePanel`)
+- Fallible construction uses `new()`, widgets use `Default` (exception: `LeftPanel` uses `new()` because it requires a `WorkspaceState` dependency)
 
 ### Bitflags
 - `ShellAnchor` wraps a `u32` with const bit values and `BitOr`

@@ -1,9 +1,9 @@
 use std::cell::Cell;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::canvas::Canvas;
-use crate::components::bar::BarState;
 use crate::renderer::Renderer;
+use crate::services::workspace::WorkspaceService;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
 use crate::shell::layer_surface::{LayerSurface, ShellAnchor, ShellLayer, WaylandState};
@@ -26,17 +26,20 @@ pub struct Shell {
     wayland: WaylandState,
     state: ShellState,
     egl: Arc<EglState>,
+    workspace: Arc<WorkspaceService>,
 }
 
 impl Shell {
     pub fn new(compositor: Arc<dyn Compositor>) -> Self {
         let wayland = WaylandState::new();
-        let state = ShellState::new(compositor);
+        let state = ShellState::new(Arc::clone(&compositor));
         let egl = EglState::new(&wayland.conn);
+        let workspace = Arc::new(WorkspaceService::new(Arc::clone(&compositor)));
         Self {
             wayland,
             state,
             egl,
+            workspace,
         }
     }
 
@@ -44,8 +47,8 @@ impl Shell {
         &self.state.compositor
     }
 
-    pub fn bar_state(&self) -> &Arc<Mutex<BarState>> {
-        &self.state.bar
+    pub fn workspace(&self) -> &Arc<WorkspaceService> {
+        &self.workspace
     }
 
     pub fn mount(&mut self, config: SurfaceSpec) -> SurfaceId {

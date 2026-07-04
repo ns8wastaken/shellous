@@ -1,5 +1,3 @@
-pub mod programs;
-
 use std::sync::Arc;
 
 use wayland_egl::WlEglSurface;

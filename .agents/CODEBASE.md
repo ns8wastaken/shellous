@@ -13,10 +13,15 @@ Shellous draws a custom top bar on Hyprland that shows workspace indicators (lef
 | Directory | Purpose |
 |-----------|---------|
 | `src/shell/` | Wayland connection, EGL/OpenGL setup, layer surface management, input dispatch |
-| `src/renderer/` | Per-surface EGL rendering, GLSL shaders (`rect.frag`, `circle.frag`), `RectProgram` |
+| `src/renderer/mod.rs` | Re-exports the `Renderer` type from the submodule |
+| `src/renderer/renderer.rs` | Per-surface EGL rendering, draw loop |
+| `src/renderer/shaders/` | GLSL shaders (`rect.frag`, `circle.frag`, `.vert`) |
+| `src/renderer/programs/rect.rs` | `RectProgram` — shader compilation, uniform upload, draw call |
 | `src/ui.rs` | `Element` trait and `RenderContext` — the widget abstraction layer |
+| `src/canvas.rs` | `Canvas` drawing surface that wraps shader programs for UI elements |
 | `src/components/bar/` | Concrete UI widgets: workspace indicators (left), center panel (middle) |
 | `src/hyprland.rs` | Hyprland IPC via Unix sockets, implements `Compositor` trait |
+| `src/workspace.rs` | `Workspace` / `WorkspaceState` — compositor-agnostic workspace types |
 | `src/main.rs` | Entry point: wires compositor, shell, and bar together |
 
 ## Key Dependencies

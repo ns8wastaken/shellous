@@ -2,6 +2,7 @@ use crate::canvas::Canvas;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
+use crate::services::workspace::WorkspaceHandle;
 use crate::ui::{Element, RenderContext};
 
 const WORKSPACE_SPACING: f32 = 8.0;
@@ -18,26 +19,29 @@ fn workspace_elem_x(index: usize) -> f32 {
 
 pub struct LeftPanel {
     pub width: f32,
+    handle: WorkspaceHandle,
 }
 
-impl Default for LeftPanel {
-    fn default() -> Self {
-        Self { width: 260.0 }
+impl LeftPanel {
+    pub fn new(handle: WorkspaceHandle) -> Self {
+        Self {
+            width: 260.0,
+            handle,
+        }
     }
 }
 
 impl Element for LeftPanel {
     fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
-        let (ws_count, active_slot) = {
-            let bar = ctx.state.bar.lock().unwrap();
-            let active_slot = bar
-                .workspaces
-                .iter()
-                .position(|w| w.id == bar.active_id)
-                .map(|i| i as i32)
-                .unwrap_or(-1);
-            (bar.workspaces.len(), active_slot)
-        };
+        // Single snapshot keeps the count and active-slot index consistent.
+        let snap = self.handle.snapshot();
+        let ws_count = snap.workspaces.len();
+        let active_slot = snap
+            .workspaces
+            .iter()
+            .position(|w| w.id == snap.active_id)
+            .map(|i| i as i32)
+            .unwrap_or(-1);
 
         let panel_h = ctx.surface_h - PANEL_OFFSET_Y;
 
@@ -57,15 +61,23 @@ impl Element for LeftPanel {
         let cy = panel_h * 0.5;
         let hh = WORKSPACE_R + 2.0;
 
-        let bar = ctx.state.bar.lock().unwrap();
-        for i in 0..bar.workspaces.len() {
-            let cx = workspace_elem_x(i);
-            if x >= cx && x <= cx + WORKSPACE_INACTIVE_W && y >= cy - hh && y <= cy + hh {
-                let id = bar.workspaces[i].id;
-                drop(bar);
-                ctx.state.compositor.switch_workspace(id);
-                return true;
-            }
+        // Compute the target workspace id while holding the lock; the
+        // activation IPC is fine to run after the lock is dropped.
+        let target_id = self.handle.read(|s| {
+            s.workspaces
+                .iter()
+                .enumerate()
+                .find(|(i, _)| {
+                    let cx = workspace_elem_x(*i);
+                    x >= cx && x <= cx + WORKSPACE_INACTIVE_W
+                        && y >= cy - hh && y <= cy + hh
+                })
+                .map(|(_, w)| w.id)
+        });
+
+        if let Some(id) = target_id {
+            ctx.state.compositor.activate_workspace(id);
+            return true;
         }
         false
     }
@@ -115,7 +127,7 @@ fn draw_inactive_indicator(
         WORKSPACE_INACTIVE_W,
         WORKSPACE_INACTIVE_W,
         &style,
-        Mat3::translation(elem_x, elem_y - WORKSPACE_R)
+        Mat3::translation(elem_x, elem_y - WORKSPACE_R),
     );
 }
 
@@ -166,6 +178,6 @@ fn draw_background(
         panel_w,
         panel_h + 18.0,
         &style,
-        Mat3::identity()
+        Mat3::identity(),
     );
 }

@@ -1,12 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use crate::components::bar::BarState;
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface_id::SurfaceId;
 
 pub struct ShellState {
-    pub bar: Arc<Mutex<BarState>>,
     pub compositor: Arc<dyn Compositor>,
     pub surfaces: Vec<ManagedSurface>,
     pub focused_surface: Option<SurfaceId>,
@@ -17,10 +15,6 @@ pub struct ShellState {
 impl ShellState {
     pub fn new(compositor: Arc<dyn Compositor>) -> Self {
         Self {
-            bar: Arc::new(Mutex::new(BarState {
-                workspaces: Vec::new(),
-                active_id: -1,
-            })),
             compositor,
             surfaces: Vec::new(),
             focused_surface: None,

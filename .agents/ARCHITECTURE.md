@@ -12,20 +12,27 @@
 ```
 main.rs
   ├── shell/ (core infrastructure)
-  │     ├── compositor.rs  — Compositor trait
-  │     ├── layer_surface.rs — WaylandState, LayerSurface, ShellAnchor, ShellLayer
-  │     ├── runtime.rs     — Shell (owner of all state), SurfaceSpec
-  │     ├── state.rs       — ShellState (shared mutable state)
-  │     ├── managed_surface.rs — ManagedSurface (per-surface state + Element list)
-  │     ├── wayland.rs     — Dispatch impls for Wayland protocol objects
-  │     ├── egl.rs         — EglState (shared GL context + RectProgram)
-  │     └── surface_id.rs  — SurfaceId = usize
-  ├── renderer.rs          — Renderer (per-surface EGL surface + draw loop)
-  ├── renderer/programs/rect.rs — RectProgram (GLSL shader + VBO + uniform upload)
-  ├── renderer/shaders/    — .vert / .frag GLSL sources
-  ├── ui.rs                — Element trait, RenderContext, draw/click dispatch helpers
-  ├── hyprland.rs          — HyprlandCompositor (Unix socket IPC)
-  └── components/bar/      — LeftPanel, MiddlePanel widgets
+  │     ├── compositor.rs       — Compositor trait
+  │     ├── layer_surface.rs    — WaylandState, LayerSurface, ShellAnchor, ShellLayer
+  │     ├── runtime.rs          — Shell (owner of all state), SurfaceSpec
+  │     ├── state.rs            — ShellState (shared mutable state)
+  │     ├── managed_surface.rs  — ManagedSurface (per-surface state + Element list)
+  │     ├── wayland.rs          — Dispatch impls for Wayland protocol objects
+  │     ├── egl.rs              — EglState (shared GL context + RectProgram)
+  │     └── surface_id.rs       — SurfaceId = usize
+  ├── renderer/
+  │     ├── mod.rs              — re-exports Renderer
+  │     ├── renderer.rs         — Renderer (per-surface EGL surface + draw loop)
+  │     ├── programs/rect.rs    — RectProgram (GLSL shader + VBO + uniform upload)
+  │     └── shaders/            — .vert / .frag GLSL sources
+  ├── ui.rs                     — Element trait, RenderContext, draw/click dispatch helpers
+  ├── canvas.rs                 — Canvas drawing surface abstraction
+  ├── hyprland.rs               — HyprlandCompositor (Unix socket IPC)
+  ├── workspace.rs              — Workspace / WorkspaceState types
+  └── components/bar/
+        ├── mod.rs              — mount(), wiring, surface spec
+        ├── left.rs             — LeftPanel (workspace indicators)
+        └── middle.rs           — MiddlePanel (centered clock/widget)
 ```
 
 ## Data Flow
@@ -57,16 +64,17 @@ wl_pointer events → ShellState Dispatch impls
   ├── Leave → clear focus
   └── Button (left click) → state.handle_click()
         └── find focused surface → click_elements() in reverse z-order
-              └── Element::on_click() → compositor.switch_workspace() etc.
+              └── Element::on_click() → compositor.activate_workspace() etc.
 ```
 
 ### Hyprland Event → Bar Update
 ```
-HyprlandCompositor::spawn_event_listener()
-  └── separate thread, blocking read on .socket2.sock
-        └── workspace events detected → compositor.refresh_bar(Arc<Mutex<BarState>>)
-              └── lock mutex, update BarState.workspaces + active_id
-                    → next render frame picks up new state in LeftPanel::draw()
+bar::mount() registers callback via compositor.on_workspace_change()
+  └── HyprlandCompositor spawns a separate thread, blocking read on .socket2.sock
+        └── workspace events detected → runs the callback
+              └── compositor.refresh_state(Arc<Mutex<WorkspaceState>>)
+                    └── lock mutex, update WorkspaceState.workspaces + active_id
+                          → next render frame picks up new state in LeftPanel::draw()
 ```
 
 ## Key Design Decisions
@@ -83,8 +91,8 @@ All surfaces share one EGL context (`EglState` owns it). Each `Renderer` holds a
 ### SDF-based Fragment Shader
 Instead of traditional geometry-based rendering, `rect.frag` uses signed distance fields to compute pixel coverage for corners, borders, insets, shadows, and gradient fills — all in a single draw call per element. This allows concave corners, variable radii per corner, and soft anti-aliasing.
 
-### Thread Safety for Bar State
-`BarState` is wrapped in `Arc<Mutex<BarState>>` shared between:
-- **Hyprland event listener thread** (writes workspace data)
+### Thread Safety for Workspace State
+`WorkspaceState` is wrapped in `Arc<Mutex<WorkspaceState>>` shared between:
+- **Hyprland event listener thread** (writes workspace data via callback)
 - **Main render thread** (reads workspace data during `LeftPanel::draw()`)
 - Locks are held briefly in both cases, avoiding contention.
