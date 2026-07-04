@@ -1,11 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::components::bar::BarState;
-use crate::shell::action::Action;
+use crate::ui::Action;
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface_id::SurfaceId;
-use crate::ui::SurfaceRole;
 
 pub struct ShellState {
     pub bar: Arc<Mutex<BarState>>,
@@ -64,7 +63,7 @@ impl ShellState {
 
         let surface = &self.surfaces[idx];
         let ctx = surface.render_context(self);
-        match surface.model.tree.on_click(x, y, &ctx) {
+        match surface.on_click(x, y, &ctx) {
             Action::SwitchWorkspace(id) => {
                 eprintln!("[shell] switching to workspace {id}");
                 self.compositor.switch_workspace(id);
@@ -84,7 +83,5 @@ impl ShellState {
         );
     }
 
-    pub fn surfaces_by_role(&self, role: SurfaceRole) -> impl Iterator<Item = &ManagedSurface> {
-        self.surfaces.iter().filter(move |surface| surface.model.role == role)
-    }
+
 }

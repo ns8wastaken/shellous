@@ -152,8 +152,8 @@ impl Dispatch<WlCallback, SurfaceId> for ShellState {
     fn event(state: &mut Self, _: &WlCallback, event: wl_callback::Event, data: &SurfaceId, _: &Connection, qh: &QueueHandle<Self>) {
         if let wl_callback::Event::Done { .. } = event {
             if let Some(surface) = state.find_surface_mut(*data) {
-                surface.frame_pending = false;
-                surface.dirty = true; // ready to draw next tick
+                surface.frame_pending.set(false);
+                surface.dirty.set(true); // ready to draw next tick
             }
         }
     }

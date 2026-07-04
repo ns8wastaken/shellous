@@ -1,20 +1,23 @@
+use std::cell::Cell;
+
 use wayland_client::QueueHandle;
 use wayland_client::protocol::wl_surface::WlSurface;
 
 use crate::renderer::Renderer;
+use crate::renderer::programs::rect::RectProgram;
 use crate::shell::layer_surface::LayerSurface;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
-use crate::ui::{RenderContext, SurfaceModel};
+use crate::ui::{Action, Element, RenderContext, click_elements, draw_elements};
 
 pub struct ManagedSurface {
     pub id: SurfaceId,
+    pub elements: Vec<Box<dyn Element>>,
     pub layer: LayerSurface,
     pub wl_surface: WlSurface,
     pub renderer: Option<Renderer>,
-    pub model: SurfaceModel,
-    pub frame_pending: bool,   // true while waiting on a frame callback
-    pub dirty: bool,           // true if something changed and we want to redraw ASAP
+    pub frame_pending: Cell<bool>,
+    pub dirty: Cell<bool>,
 }
 
 impl ManagedSurface {
@@ -29,10 +32,18 @@ impl ManagedSurface {
         }
     }
 
-    pub fn request_frame(&mut self, qh: &QueueHandle<ShellState>) {
-        if !self.frame_pending {
-            self.wl_surface.frame(qh, self.id); // id as user-data so Dispatch<WlCallback> knows which surface
-            self.frame_pending = true;
+    pub fn request_frame(&self, qh: &QueueHandle<ShellState>) {
+        if !self.frame_pending.get() {
+            self.wl_surface.frame(qh, self.id);
+            self.frame_pending.set(true);
         }
+    }
+
+    pub fn draw(&self, rect: &RectProgram, ctx: &RenderContext) {
+        draw_elements(&self.elements, rect, ctx);
+    }
+
+    pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> Action {
+        click_elements(&self.elements, x, y, ctx)
     }
 }

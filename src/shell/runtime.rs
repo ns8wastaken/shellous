@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 use wayland_protocols_wlr::layer_shell::v1::client::{
@@ -12,7 +13,7 @@ use crate::shell::layer_surface::{LayerSurface, WaylandState};
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::state::ShellState;
 use crate::shell::surface_id::SurfaceId;
-use crate::ui::{Element, SurfaceModel, SurfaceRole};
+use crate::ui::Element;
 
 pub struct SurfaceSpec {
     pub namespace: String,
@@ -21,7 +22,6 @@ pub struct SurfaceSpec {
     pub height: i32,
     pub exclusive_zone: i32,
     pub layer: Layer,
-    pub role: SurfaceRole,
     pub elements: Vec<Box<dyn Element>>,
 }
 
@@ -69,12 +69,12 @@ impl Shell {
 
         self.state.register(ManagedSurface {
             id,
+            elements: config.elements,
             layer,
             wl_surface,
             renderer: None,
-            model: SurfaceModel::new(config.role, config.elements),
-            frame_pending: false,
-            dirty: true,
+            frame_pending: Cell::new(false),
+            dirty: Cell::new(true),
         });
 
         let surface_state = {
@@ -101,37 +101,21 @@ impl Shell {
             self.wayland.dispatch(&mut self.state);
             let qh = self.wayland.qh().clone();
 
-            let dirty_ids: Vec<SurfaceId> = self.state.surfaces.iter()
-                .filter(|e| e.dirty && e.renderer.is_some())
-                .map(|e| e.id)
-                .collect();
-
-            // Pass 1: queue frame callbacks BEFORE each surface's commit (mutable)
-            for id in &dirty_ids {
-                if let Some(entry) = self.state.find_surface_mut(*id) {
-                    entry.request_frame(&qh);
-                }
-            }
-
-            // Pass 2: render — swap triggers the commit that flushes the queued callback (immutable)
             for entry in &self.state.surfaces {
-                if !dirty_ids.contains(&entry.id) {
+                if !entry.dirty.get() || entry.renderer.is_none() {
                     continue;
                 }
-                if let Some(ref renderer) = entry.renderer {
-                    renderer.make_current();
-                    let ctx = entry.render_context(&self.state);
-                    renderer.render_frame(&ctx, || {
-                        entry.model.tree.draw(renderer.rect_program(), &ctx);
-                    });
-                }
-            }
 
-            // Pass 3: clear dirty now that it's been rendered (mutable)
-            for id in dirty_ids {
-                if let Some(entry) = self.state.find_surface_mut(id) {
-                    entry.dirty = false;
-                }
+                entry.request_frame(&qh);
+
+                let renderer = entry.renderer.as_ref().unwrap();
+                renderer.make_current();
+                let ctx = entry.render_context(&self.state);
+                renderer.render_frame(&ctx, || {
+                    entry.draw(renderer.rect_program(), &ctx);
+                });
+
+                entry.dirty.set(false);
             }
         }
     }

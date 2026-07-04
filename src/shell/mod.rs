@@ -1,4 +1,3 @@
-pub mod action;
 pub mod compositor;
 pub mod egl;
 pub mod layer_surface;

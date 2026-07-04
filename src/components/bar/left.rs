@@ -1,4 +1,4 @@
-use crate::shell::action::Action;
+use crate::ui::Action;
 use crate::components::bar::state;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectProgram, RectStyle,
