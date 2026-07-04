@@ -178,7 +178,7 @@ impl Shell {
             };
 
             // 4. Compute poll timeout from state matrix
-            let timeout = if self.state.is_animating() { 0 } else { -1 };
+            let timeout = if self.state.is_animating() || self.state.any_dirty() { 0 } else { -1 };
 
             // 5. Block on kernel
             let poll_ret = unsafe {
@@ -217,6 +217,7 @@ impl Shell {
 
             // 7. Compute absolute time
             let absolute_time = shell_start.elapsed().as_secs_f32();
+            self.state.absolute_time = absolute_time;
 
             // 8. Tick & Render phase
             if self.state.is_animating() || self.state.any_dirty() {

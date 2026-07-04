@@ -77,6 +77,6 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
     }
 
     pub fn is_idle(&self, now: f32) -> bool {
-        now - self.start_time >= self.duration_secs
+        self.target == self.start_value || now - self.start_time >= self.duration_secs
     }
 }

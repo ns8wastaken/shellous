@@ -15,6 +15,7 @@ pub struct ShellState {
     pub pointer_pos: Option<(f64, f64)>,
     pub next_id: SurfaceId,
     pub animating: Cell<bool>,
+    pub absolute_time: f32,
 }
 
 impl ShellState {
@@ -26,6 +27,7 @@ impl ShellState {
             pointer_pos: None,
             next_id: 0,
             animating: Cell::new(false),
+            absolute_time: 0.0,
         }
     }
 
@@ -118,7 +120,7 @@ impl ShellState {
             state: self,
             surface_w: surface.kind.dimensions().0 as f32,
             surface_h: surface.kind.dimensions().1 as f32,
-            absolute_time: 0.0,
+            absolute_time: self.absolute_time,
         };
         surface.on_click(x, y, &ctx);
     }
