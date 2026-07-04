@@ -1,17 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use wayland_client::{
-    globals::registry_queue_init,
-    protocol::{wl_compositor::WlCompositor, wl_seat::WlSeat, wl_surface::WlSurface},
-    Connection, EventQueue, QueueHandle,
-};
+use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
+    zwlr_layer_shell_v1::Layer,
     zwlr_layer_surface_v1::{Anchor, ZwlrLayerSurfaceV1},
 };
 
-use crate::shell::state::ShellState;
+use crate::shell::surface::{Surface, SurfaceState};
 use crate::shell::surface_id::SurfaceId;
+use crate::shell::wayland::WaylandState;
 
 // ==================== SHELL-LEVEL WRAPPER TYPES ====================
 
@@ -58,121 +55,63 @@ impl std::ops::BitOr for ShellAnchor {
     }
 }
 
-// ==================== SURFACE STATE ====================
+// ==================== LAYER SURFACE ====================
 
-pub struct SurfaceState {
-    pub configured: bool,
-    pub width: i32,
-    pub height: i32,
-    #[allow(dead_code)]
-    pub surface_id: SurfaceId,
-}
-
-pub struct WaylandState {
-    pub conn: Connection,
-    event_queue: EventQueue<ShellState>,
-    qh: QueueHandle<ShellState>,
-    pub layer_shell: ZwlrLayerShellV1,
-    wl_compositor: WlCompositor,
-    #[allow(dead_code)]
-    seat: WlSeat,
-}
-
-impl WaylandState {
-    pub fn new() -> Self {
-        let conn = Connection::connect_to_env().unwrap();
-        let (globals, event_queue) = registry_queue_init::<ShellState>(&conn).unwrap();
-        let qh = event_queue.handle();
-
-        let wl_compositor = globals
-            .bind::<WlCompositor, _, _>(&qh, 1..=5, ())
-            .expect("wl_compositor not available");
-        let layer_shell = globals
-            .bind::<ZwlrLayerShellV1, _, _>(&qh, 1..=4, ())
-            .expect("zwlr_layer_shell_v1 not available");
-        let seat = globals
-            .bind::<WlSeat, _, _>(&qh, 1..=8, ())
-            .expect("wl_seat not available");
-
-        Self {
-            conn,
-            event_queue,
-            qh,
-            layer_shell,
-            wl_compositor,
-            seat,
-        }
-    }
-
-    /// Non-blocking: dispatch any events already buffered.
-    pub fn dispatch_pending(&mut self, state: &mut ShellState) {
-        self.event_queue.dispatch_pending(state).unwrap();
-    }
-
-    /// Block until the next Wayland event arrives, then dispatch it.
-    pub fn blocking_dispatch(&mut self, state: &mut ShellState) {
-        self.event_queue.blocking_dispatch(state).unwrap();
-    }
-
-    pub fn qh(&self) -> &QueueHandle<ShellState> {
-        &self.qh
-    }
-
-    pub fn wait_for_configure(
-        &mut self,
-        state: &mut ShellState,
-        surface_state: &Arc<Mutex<SurfaceState>>,
-    ) {
-        loop {
-            if surface_state.lock().unwrap().configured {
-                break;
-            }
-            self.event_queue.blocking_dispatch(state).unwrap();
-        }
-    }
-}
-
+/// Layer-shell Wayland object plus its primitive-state and the underlying
+/// wl_surface. Implements [`Surface`] for the layer-shell protocol.
 pub struct LayerSurface {
     pub layer_surface: ZwlrLayerSurfaceV1,
+    pub wl_surface: WlSurface,
     pub surface_state: Arc<Mutex<SurfaceState>>,
 }
 
 impl LayerSurface {
-    pub fn dimensions(&self) -> (i32, i32) {
-        let ss = self.surface_state.lock().unwrap();
-        (ss.width, ss.height)
-    }
-
     pub fn new(
         wl: &WaylandState,
-        namespace: &str,
         surface_id: SurfaceId,
+        namespace: &str,
         layer: Layer,
-    ) -> (Self, WlSurface) {
-        let qh = &wl.qh;
+        anchor: Anchor,
+        width: u32,
+        height: u32,
+        exclusive_zone: i32,
+    ) -> Self {
         let surface_state = Arc::new(Mutex::new(SurfaceState {
             configured: false,
             width: 0,
             height: 0,
             surface_id,
         }));
-
-        let surface = wl.wl_compositor.create_surface(qh, ());
+        let qh = wl.qh();
+        let wl_surface = wl.wl_compositor.create_surface(qh, ());
         let layer_surface = wl.layer_shell.get_layer_surface(
-            &surface,
+            &wl_surface,
             None,
             layer,
             namespace.to_string(),
             qh,
             surface_state.clone(),
         );
+        layer_surface.set_anchor(anchor);
+        layer_surface.set_size(width, height);
+        layer_surface.set_exclusive_zone(exclusive_zone);
+        Self {
+            layer_surface,
+            wl_surface,
+            surface_state,
+        }
+    }
+}
 
-        (
-            Self {
-                layer_surface,
-                surface_state,
-            },
-            surface,
-        )
+impl Surface for LayerSurface {
+    fn dimensions(&self) -> (i32, i32) {
+        let ss = self.surface_state.lock().unwrap();
+        (ss.width, ss.height)
+    }
+    fn wl_surface(&self) -> &WlSurface {
+        &self.wl_surface
+    }
+    fn surface_state(&self) -> &Arc<Mutex<SurfaceState>> {
+        &self.surface_state
     }
 }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
+use crate::shell::surface::Surface;
 use crate::shell::surface_id::SurfaceId;
 
 pub struct ShellState {
@@ -69,10 +70,8 @@ impl ShellState {
         self.focused_surface = self
             .surfaces
             .iter()
-            .find(|s| s.wl_surface == *wl_surface)
+            .find(|s| s.kind.wl_surface() == wl_surface)
             .map(|s| s.id);
         eprintln!("[shell] focus -> surface {:?}", self.focused_surface);
     }
-
-
 }

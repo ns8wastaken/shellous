@@ -4,5 +4,7 @@ pub mod layer_surface;
 pub mod managed_surface;
 pub mod runtime;
 pub mod state;
+pub mod surface;
 pub mod surface_id;
 pub mod wayland;
+pub mod xdg_surface;

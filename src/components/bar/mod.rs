@@ -3,13 +3,13 @@ mod middle;
 
 use crate::services::workspace::WorkspaceHandle;
 use crate::shell::layer_surface::{ShellAnchor, ShellLayer};
-use crate::shell::runtime::{Shell, SurfaceSpec};
+use crate::shell::runtime::{LayerSpec, Shell, SurfaceSpec};
 
 use left::LeftPanel;
 use middle::MiddlePanel;
 
 fn surface(handle: WorkspaceHandle) -> SurfaceSpec {
-    SurfaceSpec {
+    SurfaceSpec::Layer(LayerSpec {
         namespace: "shellous:bar".into(),
         anchor: ShellAnchor::TOP | ShellAnchor::LEFT | ShellAnchor::RIGHT,
         width: 0,
@@ -20,7 +20,7 @@ fn surface(handle: WorkspaceHandle) -> SurfaceSpec {
             Box::new(LeftPanel::new(handle)),
             Box::new(MiddlePanel::default()),
         ],
-    }
+    })
 }
 
 pub fn mount(shell: &mut Shell) {

@@ -1,20 +1,18 @@
 use std::cell::Cell;
 
 use wayland_client::QueueHandle;
-use wayland_client::protocol::wl_surface::WlSurface;
 
 use crate::canvas::Canvas;
 use crate::renderer::Renderer;
-use crate::shell::layer_surface::LayerSurface;
 use crate::shell::state::ShellState;
+use crate::shell::surface::{Surface, SurfaceKind};
 use crate::shell::surface_id::SurfaceId;
 use crate::ui::{Element, RenderContext, click_elements, draw_elements};
 
 pub struct ManagedSurface {
     pub id: SurfaceId,
     pub elements: Vec<Box<dyn Element>>,
-    pub layer: LayerSurface,
-    pub wl_surface: WlSurface,
+    pub kind: SurfaceKind,
     pub renderer: Option<Renderer>,
     pub frame_pending: Cell<bool>,
     pub dirty: Cell<bool>,
@@ -22,7 +20,7 @@ pub struct ManagedSurface {
 
 impl ManagedSurface {
     pub fn render_context<'a>(&self, state: &'a ShellState) -> RenderContext<'a> {
-        let (w, h) = self.layer.dimensions();
+        let (w, h) = self.kind.dimensions();
         RenderContext {
             state,
             surface_id: self.id,
@@ -34,7 +32,7 @@ impl ManagedSurface {
 
     pub fn request_frame(&self, qh: &QueueHandle<ShellState>) {
         if !self.frame_pending.get() {
-            self.wl_surface.frame(qh, self.id);
+            self.kind.wl_surface().frame(qh, self.id);
             self.frame_pending.set(true);
         }
     }
