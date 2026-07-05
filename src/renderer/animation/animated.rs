@@ -88,6 +88,10 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
         self.start_time = now;
     }
 
+    pub fn target(&self) -> T {
+        self.target
+    }
+
     pub fn is_idle(&self, now: f32) -> bool {
         self.target == self.start_value || now - self.start_time >= self.duration_secs
     }

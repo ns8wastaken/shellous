@@ -177,12 +177,13 @@ impl Element for LeftPanel {
 
         let row_animating = self.padded_row.tick_animations(absolute_time);
 
-        self.panel_width.tick(absolute_time);
-
         let target = self.padded_row.child.size().0 + self.stored_padding;
-        self.panel_width.set_target(target, absolute_time);
+        if target != self.panel_width.target() {
+            self.panel_width.set_target(target, absolute_time);
+        }
+        let panel_animating = self.panel_width.tick(absolute_time);
 
-        row_animating || !self.panel_width.is_idle(absolute_time)
+        row_animating || panel_animating
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
