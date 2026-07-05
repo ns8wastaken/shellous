@@ -19,17 +19,12 @@ pub struct ManagedSurface {
 }
 
 impl ManagedSurface {
-    pub fn render_context<'a>(
-        &self,
-        state: &'a ShellState,
-        absolute_time: f32,
-    ) -> RenderContext<'a> {
+    pub fn render_context<'a>(&self, state: &'a ShellState) -> RenderContext<'a> {
         let (w, h) = self.kind.dimensions();
         RenderContext {
             state,
             surface_w: w as f32,
             surface_h: h as f32,
-            absolute_time,
         }
     }
 

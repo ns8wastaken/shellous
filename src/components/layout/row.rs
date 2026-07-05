@@ -47,17 +47,17 @@ impl Element for Row {
         for child in &self.children {
             let tc = TranslatedCanvas::new(surface, cx, 0.0);
             child.draw(&tc, ctx);
-            cx += child.size(ctx.absolute_time).0 + self.spacing;
+            cx += child.size().0 + self.spacing;
         }
     }
 
-    fn size(&self, absolute_time: f32) -> (f32, f32) {
+    fn size(&self) -> (f32, f32) {
         if self.children.is_empty() {
             return (0.0, 0.0);
         }
         let mut width: f32 = 0.0;
         for (i, c) in self.children.iter().enumerate() {
-            width += c.size(absolute_time).0;
+            width += c.size().0;
             if i + 1 < self.children.len() {
                 width += self.spacing;
             }
@@ -65,7 +65,7 @@ impl Element for Row {
         let height = self
             .children
             .iter()
-            .map(|c| c.size(absolute_time).1)
+            .map(|c| c.size().1)
             .fold(0.0f32, f32::max);
         (width, height)
     }
@@ -75,11 +75,11 @@ impl Element for Row {
         let mut cx = 0.0;
         for c in &self.children {
             positions.push(cx);
-            cx += c.size(ctx.absolute_time).0 + self.spacing;
+            cx += c.size().0 + self.spacing;
         }
         for (i, child) in self.children.iter().enumerate().rev() {
             let px = positions[i];
-            let (cw, ch) = child.size(ctx.absolute_time);
+            let (cw, ch) = child.size();
             if x >= px && x <= px + cw && y >= 0.0 && y <= ch {
                 if child.on_click(x - px, y, ctx) {
                     return true;

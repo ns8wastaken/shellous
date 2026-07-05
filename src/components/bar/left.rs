@@ -46,11 +46,11 @@ impl Element for WorkspaceDot {
             self.width.set_target(target, absolute_time);
         }
 
-        !self.width.is_idle(absolute_time)
+        self.width.tick(absolute_time)
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let w = self.width.value(ctx.absolute_time);
+        let w = self.width.value();
         let fill = if self.is_active {
             Color { r: 1.0, g: 0.12, b: 0.14, a: 1.0 }
         } else {
@@ -79,7 +79,7 @@ impl Element for WorkspaceDot {
     }
 
     fn on_click(&self, click_x: f32, click_y: f32, ctx: &RenderContext) -> bool {
-        let w = self.width.value(ctx.absolute_time);
+        let w = self.width.value();
         let h = WORKSPACE_R * 2.0;
         if click_x >= 0.0 && click_x <= w && click_y >= 0.0 && click_y <= h {
             ctx.state.compositor.activate_workspace(self.workspace_id);
@@ -92,8 +92,8 @@ impl Element for WorkspaceDot {
         Some(self.workspace_id)
     }
 
-    fn size(&self, absolute_time: f32) -> (f32, f32) {
-        (self.width.value(absolute_time), WORKSPACE_R * 2.0)
+    fn size(&self) -> (f32, f32) {
+        (self.width.value(), WORKSPACE_R * 2.0)
     }
 }
 
@@ -129,7 +129,7 @@ impl LeftPanel {
         let left = panel_h * 0.5;
         let top = panel_h * 0.5 - WORKSPACE_R;
 
-        let row_w = row.size(0.0).0;
+        let row_w = row.size().0;
         let panel_w = row_w + bottom_offset * 3.0;
         let padded_row = Padding::new(Box::new(row)).left(left).top(top);
 
@@ -177,7 +177,9 @@ impl Element for LeftPanel {
 
         let row_animating = self.padded_row.tick_animations(absolute_time);
 
-        let target = self.padded_row.child.size(absolute_time).0 + self.stored_padding;
+        self.panel_width.tick(absolute_time);
+
+        let target = self.padded_row.child.size().0 + self.stored_padding;
         self.panel_width.set_target(target, absolute_time);
 
         row_animating || !self.panel_width.is_idle(absolute_time)
@@ -185,7 +187,7 @@ impl Element for LeftPanel {
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
         let panel_h = ctx.surface_h - self.bottom_offset;
-        let panel_w = self.panel_width.value(ctx.absolute_time);
+        let panel_w = self.panel_width.value();
 
         draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, panel_w, self.bottom_offset);
 

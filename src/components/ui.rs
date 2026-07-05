@@ -7,8 +7,6 @@ pub struct RenderContext<'a> {
     pub surface_w: f32,
     pub surface_h: f32,
     pub state: &'a ShellState,
-    /// Total seconds elapsed since the shell started.
-    pub absolute_time: f32,
 }
 
 // ==================== ELEMENT ====================
@@ -31,7 +29,7 @@ pub trait Element {
         None
     }
 
-    fn size(&self, _absolute_time: f32) -> (f32, f32) {
+    fn size(&self) -> (f32, f32) {
         (0.0, 0.0)
     }
 

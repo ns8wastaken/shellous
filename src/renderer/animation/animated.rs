@@ -66,7 +66,7 @@ impl<T: Lerp + Copy + PartialEq> Animated<T> {
         self.current_value
     }
 
-    pub fn value_at(&self, now: f32) -> T {
+    fn value_at(&self, now: f32) -> T {
         let elapsed = now - self.start_time;
         if elapsed >= self.duration_secs {
             return self.target;

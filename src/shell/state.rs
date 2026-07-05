@@ -15,7 +15,6 @@ pub struct ShellState {
     pub pointer_pos: Option<(f64, f64)>,
     pub next_id: SurfaceId,
     pub animating: Cell<bool>,
-    pub absolute_time: f32,
 }
 
 impl ShellState {
@@ -27,7 +26,6 @@ impl ShellState {
             pointer_pos: None,
             next_id: 0,
             animating: Cell::new(false),
-            absolute_time: 0.0,
         }
     }
 
@@ -87,14 +85,14 @@ impl ShellState {
     }
 
     /// Render phase — draw all dirty surfaces.
-    pub fn render(&self, absolute_time: f32) {
+    pub fn render(&self) {
         for entry in &self.surfaces {
             if !entry.dirty.get() || entry.renderer.is_none() {
                 continue;
             }
             let renderer = entry.renderer.as_ref().unwrap();
             renderer.make_current();
-            let ctx = entry.render_context(self, absolute_time);
+            let ctx = entry.render_context(self);
             let canvas = Canvas::new(renderer.rect_program());
             renderer.render_frame(&ctx, || {
                 entry.draw(&canvas, &ctx);
@@ -120,7 +118,6 @@ impl ShellState {
             state: self,
             surface_w: surface.kind.dimensions().0 as f32,
             surface_h: surface.kind.dimensions().1 as f32,
-            absolute_time: self.absolute_time,
         };
         surface.on_click(x, y, &ctx);
     }

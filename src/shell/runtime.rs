@@ -216,7 +216,6 @@ impl Shell {
 
             // 7. Compute absolute time
             let absolute_time = shell_start.elapsed().as_secs_f32();
-            self.state.absolute_time = absolute_time;
 
             // 8. Tick & Render phase
             if self.state.is_animating() || self.state.any_dirty() {
@@ -232,7 +231,7 @@ impl Shell {
                     }
                 }
 
-                self.state.render(absolute_time);
+                self.state.render();
 
                 if !still_moving {
                     self.state.set_animating(false);

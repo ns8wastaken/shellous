@@ -77,8 +77,8 @@ impl Element for Padding {
         self.child.draw(&tc, ctx);
     }
 
-    fn size(&self, absolute_time: f32) -> (f32, f32) {
-        let (cw, ch) = self.child.size(absolute_time);
+    fn size(&self) -> (f32, f32) {
+        let (cw, ch) = self.child.size();
         (cw + self.left + self.right, ch + self.top + self.bottom)
     }
 
