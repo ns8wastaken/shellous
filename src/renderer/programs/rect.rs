@@ -48,6 +48,12 @@ pub struct Corners<T> {
     pub bl: T,
 }
 
+impl<T: Clone> Corners<T> {
+    pub fn all(v: T) -> Self {
+        Self { tl: v.clone(), tr: v.clone(), br: v.clone(), bl: v }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LogicalInset {
     pub left: f32,
@@ -120,6 +126,17 @@ pub struct RectStyle {
     pub shadow_exclusion_corners: Corners<CornerShape>,
     pub shadow_exclusion_logical_inset: LogicalInset,
     pub shadow_exclusion_radius: Corners<f32>,
+}
+
+impl RectStyle {
+    pub fn solid(fill: Color, radius: f32) -> Self {
+        Self {
+            fill,
+            fill_mode: FillMode::Solid,
+            radius: Corners::all(radius),
+            ..Default::default()
+        }
+    }
 }
 
 // ==================== RECT PROGRAM ====================

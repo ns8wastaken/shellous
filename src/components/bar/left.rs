@@ -17,7 +17,6 @@ const WORKSPACE_SPACING: f32 = 8.0;
 pub struct LeftPanel {
     padded_row: Padding,
     panel_width: Animated<f32>,
-    total_horizontal_padding: f32,
     bottom_offset: f32,
     prev_workspace_ids: Vec<i32>,
 }
@@ -33,12 +32,13 @@ impl LeftPanel {
             .top(top)
             .right(corner_r * 2.0);
 
+        let initial_width = padded_row.size().0;
+
         Self {
             padded_row,
-            panel_width: Animated::new(corner_r * 3.0)
+            panel_width: Animated::new(initial_width)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
-            total_horizontal_padding: corner_r * 3.0,
             bottom_offset,
             prev_workspace_ids: Vec::new(),
         }
@@ -62,7 +62,7 @@ impl Element for LeftPanel {
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let row_animating = self.padded_row.tick_animations(absolute_time);
 
-        let target = self.padded_row.child.size().0 + self.total_horizontal_padding;
+        let target = self.padded_row.size().0;
         if target != self.panel_width.target() {
             self.panel_width.set_target(target, absolute_time);
         }

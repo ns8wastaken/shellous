@@ -26,9 +26,17 @@ impl Row {
         self.spacing = spacing;
         self
     }
+}
 
-    pub fn push(&mut self, child: Box<dyn Element>) {
-        self.children.push(child);
+impl Row {
+    fn layout(&self) -> Vec<f32> {
+        let mut cx = 0.0;
+        let mut offsets = Vec::with_capacity(self.children.len());
+        for c in &self.children {
+            offsets.push(cx);
+            cx += c.size().0 + self.spacing;
+        }
+        offsets
     }
 }
 
@@ -50,25 +58,21 @@ impl Element for Row {
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let mut cx = 0.0;
-        for child in &self.children {
+        for (child, cx) in self.children.iter().zip(self.layout()) {
             let tc = TranslatedCanvas::new(surface, cx, 0.0);
             child.draw(&tc, ctx);
-            cx += child.size().0 + self.spacing;
         }
     }
 
     fn size(&self) -> (f32, f32) {
-        if self.children.is_empty() {
-            return (0.0, 0.0);
-        }
-        let mut width: f32 = 0.0;
-        for (i, c) in self.children.iter().enumerate() {
-            width += c.size().0;
-            if i + 1 < self.children.len() {
-                width += self.spacing;
+        let offsets = self.layout();
+        let width = match offsets.last() {
+            Some(&last) => {
+                let idx = offsets.len() - 1;
+                last + self.children[idx].size().0
             }
-        }
+            None => 0.0,
+        };
         let height = self
             .children
             .iter()
@@ -78,14 +82,9 @@ impl Element for Row {
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let mut positions: Vec<f32> = Vec::with_capacity(self.children.len());
-        let mut cx = 0.0;
-        for c in &self.children {
-            positions.push(cx);
-            cx += c.size().0 + self.spacing;
-        }
+        let offsets = self.layout();
         for (i, child) in self.children.iter().enumerate().rev() {
-            let px = positions[i];
+            let px = offsets[i];
             let (cw, ch) = child.size();
             if x >= px && x <= px + cw && y >= 0.0 && y <= ch {
                 if child.on_click(x - px, y, ctx) {

@@ -3,7 +3,7 @@ use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
 use crate::renderer::programs::rect::{
-    Color, Corners, FillMode, Mat3, RectStyle,
+    Color, Mat3, RectStyle,
 };
 use crate::services::workspace::WorkspaceSnapshot;
 
@@ -50,17 +50,7 @@ impl Element for WorkspaceDot {
         } else {
             Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
         };
-        let style = RectStyle {
-            fill,
-            fill_mode: FillMode::Solid,
-            radius: Corners {
-                tl: WORKSPACE_R,
-                tr: WORKSPACE_R,
-                br: WORKSPACE_R,
-                bl: WORKSPACE_R,
-            },
-            ..Default::default()
-        };
+        let style = RectStyle::solid(fill, WORKSPACE_R);
         surface.draw_rect(
             ctx.surface_w,
             ctx.surface_h,
