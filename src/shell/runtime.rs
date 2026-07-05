@@ -143,6 +143,10 @@ impl Shell {
 
     pub fn run(&mut self) {
         let shell_start = Instant::now();
+
+        // Initial data push before the first frame
+        self.state.update_surfaces(&self.workspace.handle().snapshot());
+
         let wayland_fd = self.wayland.conn.as_fd().as_raw_fd();
         let wake_fd = self.state.compositor.wake_fd();
 
@@ -212,6 +216,7 @@ impl Shell {
                     );
                 }
                 self.state.sync_workspace_snapshots();
+                self.state.update_surfaces(&self.workspace.handle().snapshot());
             }
 
             // 7. Compute absolute time

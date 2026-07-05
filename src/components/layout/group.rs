@@ -1,4 +1,7 @@
+use std::any::Any;
+
 use crate::components::canvas::DrawingSurface;
+use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
 
 // ==================== GROUP ====================
@@ -16,6 +19,12 @@ impl Group {
 }
 
 impl Element for Group {
+    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
+        for child in &mut self.children {
+            child.update(snapshot);
+        }
+    }
+
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let mut active = false;
         for child in &mut self.children {
@@ -39,5 +48,9 @@ impl Element for Group {
             }
         }
         false
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
     }
 }

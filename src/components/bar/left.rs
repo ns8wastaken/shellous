@@ -7,7 +7,7 @@ use crate::renderer::animation::easing::Easing;
 use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
-use crate::services::workspace::WorkspaceHandle;
+use crate::services::workspace::WorkspaceSnapshot;
 
 const WORKSPACE_SPACING: f32 = 8.0;
 const WORKSPACE_R: f32 = 5.5;
@@ -18,16 +18,14 @@ const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
 
 struct WorkspaceDot {
     workspace_id: i32,
-    handle: WorkspaceHandle,
     is_active: bool,
     width: Animated<f32>,
 }
 
 impl WorkspaceDot {
-    fn new(workspace_id: i32, handle: WorkspaceHandle) -> Self {
+    fn new(workspace_id: i32) -> Self {
         Self {
             workspace_id,
-            handle,
             is_active: false,
             width: Animated::new(WORKSPACE_INACTIVE_W)
                 .with_duration(0.26)
@@ -37,12 +35,13 @@ impl WorkspaceDot {
 }
 
 impl Element for WorkspaceDot {
+    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
+        self.is_active = snapshot.active_id == self.workspace_id;
+    }
+
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        let snap = self.handle.snapshot();
-        let is_active_now = snap.active_id == self.workspace_id;
-        if is_active_now != self.is_active {
-            self.is_active = is_active_now;
-            let target = if is_active_now { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
+        let target = if self.is_active { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
+        if target != self.width.target() {
             self.width.set_target(target, absolute_time);
         }
 
@@ -100,84 +99,71 @@ impl Element for WorkspaceDot {
 // ==================== LEFT PANEL ====================
 
 pub struct LeftPanel {
-    handle: WorkspaceHandle,
     padded_row: Padding,
     panel_width: Animated<f32>,
-    stored_padding: f32,
+    total_horizontal_padding: f32,
     bottom_offset: f32,
     prev_workspace_ids: Vec<i32>,
 }
 
 impl LeftPanel {
-    pub fn new(handle: WorkspaceHandle, bottom_offset: f32) -> Self {
-        let snap = handle.snapshot();
-        let mut ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
-        ids.sort_unstable();
-        let mut row = Row::new().spacing(WORKSPACE_SPACING);
-        let mut sorted = snap.workspaces.clone();
-        sorted.sort_by_key(|ws| ws.id);
-        for ws in &sorted {
-            row.push(Box::new(WorkspaceDot::new(
-                ws.id,
-                handle.clone(),
-            )));
-        }
+    pub fn new(bottom_offset: f32) -> Self {
+        let top = 15.0 - WORKSPACE_R;
+        let corner_r = 30.0 / 2.0;
 
-        // surface height is 30 + bottom_offset (from bar/mod.rs),
-        // so panel_h = (30 + bottom_offset) - bottom_offset = 30 always.
-        let panel_h = 30.0;
-        let left = panel_h * 0.5;
-        let top = panel_h * 0.5 - WORKSPACE_R;
-
-        let row_w = row.size().0;
-        let panel_w = row_w + bottom_offset * 3.0;
-        let padded_row = Padding::new(Box::new(row)).left(left).top(top);
+        let row = Row::new().spacing(WORKSPACE_SPACING);
+        let padded_row = Padding::new(Box::new(row))
+            .left(corner_r)
+            .top(top)
+            .right(corner_r * 2.0);
 
         Self {
-            handle,
             padded_row,
-            panel_width: Animated::new(panel_w)
+            panel_width: Animated::new(corner_r * 3.0)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
-            stored_padding: bottom_offset * 2.5,
+            total_horizontal_padding: corner_r * 3.0,
             bottom_offset,
-            prev_workspace_ids: ids,
+            prev_workspace_ids: Vec::new(),
         }
     }
 }
 
 impl Element for LeftPanel {
-    fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        let snap = self.handle.snapshot();
-
-        // Structural changes — add / remove workspace dots, maintain numeric order
-        let mut cur_ids: Vec<i32> = snap.workspaces.iter().map(|w| w.id).collect();
+    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
+        let mut cur_ids: Vec<i32> = snapshot.workspaces.iter().map(|w| w.id).collect();
         cur_ids.sort_unstable();
         if cur_ids != self.prev_workspace_ids {
-            let old = self.padded_row.child.replace_children(Vec::new());
+            let row = self.padded_row.child
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Row>())
+                .expect("LeftPanel child should be a Row");
+
+            let old = std::mem::take(&mut row.children);
             let mut by_id: Vec<(i32, Box<dyn Element>)> = old
                 .into_iter()
                 .filter_map(|c| c.id().map(|id| (id, c)))
                 .collect();
 
-            let mut sorted = snap.workspaces.clone();
+            let mut sorted = snapshot.workspaces.clone();
             sorted.sort_by_key(|ws| ws.id);
 
             for ws in &sorted {
                 match by_id.iter().position(|(id, _)| *id == ws.id) {
-                    Some(idx) => self.padded_row.child.push_child(by_id.remove(idx).1),
-                    None => self.padded_row.child.push_child(Box::new(WorkspaceDot::new(
-                        ws.id,
-                        self.handle.clone(),
-                    ))),
+                    Some(idx) => row.children.push(by_id.remove(idx).1),
+                    None => row.children.push(Box::new(WorkspaceDot::new(ws.id))),
                 }
             }
             self.prev_workspace_ids = cur_ids;
         }
 
+        self.padded_row.update(snapshot);
+    }
+
+    fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let row_animating = self.padded_row.tick_animations(absolute_time);
 
-        let target = self.padded_row.child.size().0 + self.stored_padding;
+        let target = self.padded_row.child.size().0 + self.total_horizontal_padding;
         if target != self.panel_width.target() {
             self.panel_width.set_target(target, absolute_time);
         }
@@ -187,10 +173,13 @@ impl Element for LeftPanel {
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let panel_h = ctx.surface_h - self.bottom_offset;
-        let panel_w = self.panel_width.value();
-
-        draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, panel_w, self.bottom_offset);
+        draw_background(
+            surface,
+            ctx.surface_w,
+            ctx.surface_h,
+            self.panel_width.value(),
+            self.bottom_offset
+        );
 
         self.padded_row.draw(surface, ctx);
     }
@@ -206,11 +195,10 @@ fn draw_background(
     surface: &dyn DrawingSurface,
     surface_w: f32,
     surface_h: f32,
-    panel_h: f32,
     panel_w: f32,
     bottom_offset: f32,
 ) {
-    let rounding = panel_h * 0.5;
+    let corner_r = (surface_h - 18.0) / 2.0;
     let style = RectStyle {
         fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
         fill_mode: FillMode::Solid,
@@ -220,8 +208,8 @@ fn draw_background(
             br: CornerShape::Convex,
             bl: CornerShape::Concave,
         },
-        radius: Corners { tl: 0.0, tr: rounding, br: rounding, bl: bottom_offset },
-        logical_inset: LogicalInset { right: rounding, bottom: bottom_offset, ..Default::default() },
+        radius: Corners { tl: 0.0, tr: corner_r, br: corner_r, bl: bottom_offset },
+        logical_inset: LogicalInset { right: corner_r, bottom: bottom_offset, ..Default::default() },
         ..Default::default()
     };
     surface.draw_rect(

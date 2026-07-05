@@ -1,4 +1,7 @@
+use std::any::Any;
+
 use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
 
 // ==================== ROW ====================
@@ -32,6 +35,12 @@ impl Row {
 }
 
 impl Element for Row {
+    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
+        for child in &mut self.children {
+            child.update(snapshot);
+        }
+    }
+
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let mut active = false;
         for child in &mut self.children {
@@ -89,14 +98,7 @@ impl Element for Row {
         false
     }
 
-    fn replace_children(
-        &mut self,
-        children: Vec<Box<dyn Element>>,
-    ) -> Vec<Box<dyn Element>> {
-        std::mem::replace(&mut self.children, children)
-    }
-
-    fn push_child(&mut self, child: Box<dyn Element>) {
-        self.children.push(child);
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
     }
 }

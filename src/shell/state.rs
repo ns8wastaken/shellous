@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::components::canvas::Canvas;
 use crate::components::ui::RenderContext;
+use crate::services::workspace::WorkspaceSnapshot;
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface::Surface;
@@ -68,6 +69,15 @@ impl ShellState {
             entry.dirty.set(true);
         }
         self.animating.set(true);
+    }
+
+    /// Push a fresh workspace snapshot through the element tree.
+    pub fn update_surfaces(&mut self, snapshot: &WorkspaceSnapshot) {
+        for entry in &mut self.surfaces {
+            if let Some(ref mut root) = entry.root {
+                root.update(snapshot);
+            }
+        }
     }
 
     /// Update phase — tick all element animations. Returns true if any

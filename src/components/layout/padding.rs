@@ -1,4 +1,7 @@
+use std::any::Any;
+
 use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
 
 // ==================== PADDING ====================
@@ -68,6 +71,10 @@ impl Padding {
 }
 
 impl Element for Padding {
+    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
+        self.child.update(snapshot);
+    }
+
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
         self.child.tick_animations(absolute_time)
     }
@@ -84,5 +91,9 @@ impl Element for Padding {
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
         self.child.on_click(x - self.left, y - self.top, ctx)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        self.child.as_any_mut()
     }
 }
