@@ -1,4 +1,4 @@
-use crate::components::canvas::DrawingSurface;
+use crate::components::canvas::{DrawingSurface, Rect};
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
@@ -50,25 +50,19 @@ impl Element for WorkspaceDot {
         } else {
             Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
         };
-        let style = RectStyle::solid(fill, WORKSPACE_R);
         surface.draw_rect(
-            ctx.surface_w,
-            ctx.surface_h,
             w,
             WORKSPACE_R * 2.0,
-            &style,
+            &RectStyle::solid(fill, WORKSPACE_R),
             Mat3::identity(),
         );
     }
 
-    fn on_click(&self, click_x: f32, click_y: f32, ctx: &RenderContext) -> bool {
-        let w = self.width.value();
-        let h = WORKSPACE_R * 2.0;
-        if click_x >= 0.0 && click_x <= w && click_y >= 0.0 && click_y <= h {
+    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        Rect::from_size(self.width.value(), WORKSPACE_R * 2.0).contains(x, y) && {
             ctx.state.compositor.activate_workspace(self.workspace_id);
-            return true;
+            true
         }
-        false
     }
 
     fn id(&self) -> Option<i32> {

@@ -103,7 +103,7 @@ impl ShellState {
             let renderer = entry.renderer.as_ref().unwrap();
             renderer.make_current();
             let ctx = entry.render_context(self);
-            let canvas = Canvas::new(renderer.rect_program());
+            let canvas = Canvas::new(renderer.rect_program(), ctx.surface_w, ctx.surface_h);
             renderer.render_frame(&ctx, || {
                 entry.draw(&canvas, &ctx);
             });

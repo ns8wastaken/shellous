@@ -5,7 +5,7 @@ use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
 use crate::renderer::programs::rect::{
-    Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
+    CornerShape, Mat3, RectStyle,
 };
 use crate::services::workspace::WorkspaceSnapshot;
 use super::{BAR_HEIGHT, workspace_dot::{WorkspaceDot, WORKSPACE_R}};
@@ -75,23 +75,19 @@ impl Element for LeftPanel {
         let corner_r = (ctx.surface_h - self.bottom_offset) / 2.0;
 
         surface.draw_rect(
-            ctx.surface_w,
-            ctx.surface_h,
             self.panel_width.value(),
             ctx.surface_h,
-            &RectStyle {
-                fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
-                fill_mode: FillMode::Solid,
-                corners: Corners {
-                    tl: CornerShape::Convex,
-                    tr: CornerShape::Concave,
-                    br: CornerShape::Convex,
-                    bl: CornerShape::Concave,
-                },
-                radius: Corners { tl: 0.0, tr: corner_r, br: corner_r, bl: self.bottom_offset },
-                logical_inset: LogicalInset { right: corner_r, bottom: self.bottom_offset, ..Default::default() },
-                ..Default::default()
-            },
+            &RectStyle::new()
+                .fill(0.085, 0.095, 0.110, 1.0)
+                .corners(
+                    CornerShape::Convex,
+                    CornerShape::Concave,
+                    CornerShape::Convex,
+                    CornerShape::Concave,
+                )
+                .radius(0.0, corner_r, corner_r, self.bottom_offset)
+                .inset_right(corner_r)
+                .inset_bottom(self.bottom_offset),
             Mat3::identity(),
         );
 

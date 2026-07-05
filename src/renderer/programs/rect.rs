@@ -129,6 +129,10 @@ pub struct RectStyle {
 }
 
 impl RectStyle {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn solid(fill: Color, radius: f32) -> Self {
         Self {
             fill,
@@ -136,6 +140,79 @@ impl RectStyle {
             radius: Corners::all(radius),
             ..Default::default()
         }
+    }
+
+    pub fn fill(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
+        self.fill = Color { r, g, b, a };
+        self.fill_mode = FillMode::Solid;
+        self
+    }
+
+    pub fn fill_color(mut self, color: Color) -> Self {
+        self.fill = color;
+        self.fill_mode = FillMode::Solid;
+        self
+    }
+
+    pub fn border(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
+        self.border = Color { r, g, b, a };
+        self
+    }
+
+    pub fn border_color(mut self, color: Color) -> Self {
+        self.border = color;
+        self
+    }
+
+    pub fn border_width(mut self, w: f32) -> Self {
+        self.border_width = w;
+        self
+    }
+
+    pub fn corners(
+        mut self,
+        tl: CornerShape,
+        tr: CornerShape,
+        br: CornerShape,
+        bl: CornerShape,
+    ) -> Self {
+        self.corners = Corners { tl, tr, br, bl };
+        self
+    }
+
+    pub fn radius(mut self, tl: f32, tr: f32, br: f32, bl: f32) -> Self {
+        self.radius = Corners { tl, tr, br, bl };
+        self
+    }
+
+    pub fn all_radius(mut self, r: f32) -> Self {
+        self.radius = Corners::all(r);
+        self
+    }
+
+    pub fn inset(mut self, l: f32, t: f32, r: f32, b: f32) -> Self {
+        self.logical_inset = LogicalInset { left: l, top: t, right: r, bottom: b };
+        self
+    }
+
+    pub fn inset_left(mut self, v: f32) -> Self {
+        self.logical_inset.left = v;
+        self
+    }
+
+    pub fn inset_top(mut self, v: f32) -> Self {
+        self.logical_inset.top = v;
+        self
+    }
+
+    pub fn inset_right(mut self, v: f32) -> Self {
+        self.logical_inset.right = v;
+        self
+    }
+
+    pub fn inset_bottom(mut self, v: f32) -> Self {
+        self.logical_inset.bottom = v;
+        self
     }
 }
 
