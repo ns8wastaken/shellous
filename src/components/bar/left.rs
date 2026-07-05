@@ -8,93 +8,9 @@ use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
 use crate::services::workspace::WorkspaceSnapshot;
+use super::workspace_dot::{WorkspaceDot, WORKSPACE_R};
 
 const WORKSPACE_SPACING: f32 = 8.0;
-const WORKSPACE_R: f32 = 5.5;
-const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
-const WORKSPACE_ACTIVE_W: f32 = WORKSPACE_INACTIVE_W * 3.0;
-
-// ==================== WORKSPACE DOT ====================
-
-struct WorkspaceDot {
-    workspace_id: i32,
-    is_active: bool,
-    width: Animated<f32>,
-}
-
-impl WorkspaceDot {
-    fn new(workspace_id: i32) -> Self {
-        Self {
-            workspace_id,
-            is_active: false,
-            width: Animated::new(WORKSPACE_INACTIVE_W)
-                .with_duration(0.26)
-                .with_easing(Easing::EaseOutCubic),
-        }
-    }
-}
-
-impl Element for WorkspaceDot {
-    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
-        self.is_active = snapshot.active_id == self.workspace_id;
-    }
-
-    fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        let target = if self.is_active { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
-        if target != self.width.target() {
-            self.width.set_target(target, absolute_time);
-        }
-
-        self.width.tick(absolute_time)
-    }
-
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let w = self.width.value();
-        let fill = if self.is_active {
-            Color { r: 1.0, g: 0.12, b: 0.14, a: 1.0 }
-        } else {
-            Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
-        };
-        let style = RectStyle {
-            fill,
-            fill_mode: FillMode::Solid,
-            radius: Corners {
-                tl: WORKSPACE_R,
-                tr: WORKSPACE_R,
-                br: WORKSPACE_R,
-                bl: WORKSPACE_R,
-            },
-            softness: 0.85,
-            ..Default::default()
-        };
-        surface.draw_rect(
-            ctx.surface_w,
-            ctx.surface_h,
-            w,
-            WORKSPACE_R * 2.0,
-            &style,
-            Mat3::identity(),
-        );
-    }
-
-    fn on_click(&self, click_x: f32, click_y: f32, ctx: &RenderContext) -> bool {
-        let w = self.width.value();
-        let h = WORKSPACE_R * 2.0;
-        if click_x >= 0.0 && click_x <= w && click_y >= 0.0 && click_y <= h {
-            ctx.state.compositor.activate_workspace(self.workspace_id);
-            return true;
-        }
-        false
-    }
-
-    fn id(&self) -> Option<i32> {
-        Some(self.workspace_id)
-    }
-
-    fn size(&self) -> (f32, f32) {
-        (self.width.value(), WORKSPACE_R * 2.0)
-    }
-}
 
 // ==================== LEFT PANEL ====================
 

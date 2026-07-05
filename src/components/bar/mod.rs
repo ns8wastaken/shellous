@@ -1,5 +1,6 @@
 mod left;
 mod middle;
+mod workspace_dot;
 
 use crate::components::layout::group::Group;
 use crate::services::hyprland::get_option_int;
