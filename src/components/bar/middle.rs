@@ -3,6 +3,7 @@ use crate::components::ui::{Element, RenderContext};
 use crate::renderer::programs::rect::{
     Color, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
+use super::{BAR_HEIGHT, CORNER_RADIUS};
 
 pub struct MiddlePanel {
     pub width: f32,
@@ -16,7 +17,7 @@ impl Default for MiddlePanel {
 
 impl Element for MiddlePanel {
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let panel_h = ctx.surface_h - 18.0;
+        let panel_h = ctx.surface_h - (BAR_HEIGHT - CORNER_RADIUS);
         let x = ((ctx.surface_w - self.width) * 0.5).max(0.0);
         draw_background(surface, ctx.surface_w, ctx.surface_h, panel_h, self.width, x);
     }
@@ -33,8 +34,8 @@ fn draw_background(
     let style = RectStyle {
         fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
         fill_mode: FillMode::Solid,
-        logical_inset: LogicalInset { right: 12.0, left: 12.0, ..Default::default() },
-        radius: Corners { tl: 12.0, tr: 12.0, br: 12.0, bl: 12.0 },
+        logical_inset: LogicalInset { right: CORNER_RADIUS, left: CORNER_RADIUS, ..Default::default() },
+        radius: Corners { tl: CORNER_RADIUS, tr: CORNER_RADIUS, br: CORNER_RADIUS, bl: CORNER_RADIUS },
         ..Default::default()
     };
     surface.draw_rect(

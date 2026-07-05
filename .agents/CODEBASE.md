@@ -6,7 +6,7 @@
 
 ## What It Does
 
-Shellous draws a custom top bar on Hyprland that shows workspace indicators (left panel) and a centered panel (middle). It connects to Hyprland's Unix sockets for workspace state and event listening, and uses OpenGL ES 3.0 fragment shaders with signed distance fields (SDFs) to render complex UI elements including rounded rectangles, concave corners, borders, gradients, and drop shadows.
+Shellous draws a custom top bar on Hyprland that shows workspace indicators (left panel) and a centered panel (middle). Data flows unidirectionally: the shell runtime pushes `WorkspaceSnapshot` through the element tree via `Element::update()` — components never pull from services. It connects to Hyprland's Unix sockets for workspace state and event listening, and uses OpenGL ES 3.0 fragment shaders with signed distance fields (SDFs) to render complex UI elements including rounded rectangles, concave corners, borders, gradients, and drop shadows.
 
 ## High-Level Structure
 
@@ -26,7 +26,7 @@ Shellous draws a custom top bar on Hyprland that shows workspace indicators (lef
 | `src/renderer/` | Per-surface EGL rendering (mod.rs re-exports), `RectProgram` (shaders + VBO + uniform upload), GLSL shaders under `shaders/` |
 | `src/ui.rs` | `Element` trait + `RenderContext` — UI widget abstraction layer |
 | `src/canvas.rs` | `Canvas` — drawing surface that wraps shader programs for UI elements |
-| `src/components/bar/` | Concrete UI widgets: `LeftPanel` (workspace indicators), `MiddlePanel` (centered). Constructs `SurfaceSpec::Layer`. |
+| `src/components/bar/` | Concrete UI widgets: `LeftPanel`, `WorkspaceDot`, `MiddlePanel`. Constructs `SurfaceSpec::Layer`. |
 | `src/hyprland.rs` | `HyprlandCompositor` — Hyprland IPC via Unix sockets; implements `Compositor` trait with multi-subscriber support, typed event emission, lazy-spawned listener thread with resurrect-on-panic |
 | `src/main.rs` | Entry point: wires compositor, shell, and bar together |
 

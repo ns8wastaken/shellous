@@ -60,8 +60,9 @@ vec2 shape_distance_with_corner(vec2 point, vec2 size, vec4 radii, vec4 corner_s
     vec2 body_min = min(safe_inset.xy, size);
     vec2 body_max = max(body_min, size - safe_inset.zw);
     vec2 body_size = max(body_max - body_min, vec2(0.0));
-    float max_radius = max(min(body_size.x, body_size.y) * 0.5, 0.0);
-    vec4 r = clamp(radii, vec4(0.0), vec4(max_radius));
+    // float max_radius = max(min(body_size.x, body_size.y) * 0.5, 0.0);
+    // vec4 r = clamp(radii, vec4(0.0), vec4(max_radius));
+    vec4 r = max(radii, vec4(0.0));
 
     bool tl_concave = corner_shapes.x > 0.5;
     bool tr_concave = corner_shapes.y > 0.5;
@@ -194,8 +195,9 @@ float shadow_shape_distance(vec2 point, vec2 size, vec4 radii, vec4 corner_shape
     vec2 body_min = min(safe_inset.xy, size);
     vec2 body_max = max(body_min, size - safe_inset.zw);
     vec2 body_size = max(body_max - body_min, vec2(0.0));
-    float max_radius = max(min(body_size.x, body_size.y) * 0.5, 0.0);
-    vec4 r = clamp(radii, vec4(0.0), vec4(max_radius));
+    // float max_radius = max(min(body_size.x, body_size.y) * 0.5, 0.0);
+    // vec4 r = clamp(radii, vec4(0.0), vec4(max_radius));
+    vec4 r = max(radii, vec4(0.0));
 
     bool tl_concave = corner_shapes.x > 0.5;
     bool tr_concave = corner_shapes.y > 0.5;

@@ -8,7 +8,7 @@ use crate::renderer::programs::rect::{
     Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle,
 };
 use crate::services::workspace::WorkspaceSnapshot;
-use super::workspace_dot::{WorkspaceDot, WORKSPACE_R};
+use super::{BAR_HEIGHT, workspace_dot::{WorkspaceDot, WORKSPACE_R}};
 
 const WORKSPACE_SPACING: f32 = 8.0;
 
@@ -24,8 +24,8 @@ pub struct LeftPanel {
 
 impl LeftPanel {
     pub fn new(bottom_offset: f32) -> Self {
-        let top = 15.0 - WORKSPACE_R;
-        let corner_r = 30.0 / 2.0;
+        let top = BAR_HEIGHT / 2.0 - WORKSPACE_R;
+        let corner_r = BAR_HEIGHT / 2.0;
 
         let row = Row::new().spacing(WORKSPACE_SPACING);
         let padded_row = Padding::new(Box::new(row))
@@ -72,26 +72,26 @@ impl Element for LeftPanel {
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        let corner_r = (ctx.surface_h - 18.0) / 2.0;
-        let style = RectStyle {
-            fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
-            fill_mode: FillMode::Solid,
-            corners: Corners {
-                tl: CornerShape::Convex,
-                tr: CornerShape::Concave,
-                br: CornerShape::Convex,
-                bl: CornerShape::Concave,
-            },
-            radius: Corners { tl: 0.0, tr: corner_r, br: corner_r, bl: self.bottom_offset },
-            logical_inset: LogicalInset { right: corner_r, bottom: self.bottom_offset, ..Default::default() },
-            ..Default::default()
-        };
+        let corner_r = (ctx.surface_h - self.bottom_offset) / 2.0;
+
         surface.draw_rect(
             ctx.surface_w,
             ctx.surface_h,
             self.panel_width.value(),
             ctx.surface_h,
-            &style,
+            &RectStyle {
+                fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
+                fill_mode: FillMode::Solid,
+                corners: Corners {
+                    tl: CornerShape::Convex,
+                    tr: CornerShape::Concave,
+                    br: CornerShape::Convex,
+                    bl: CornerShape::Concave,
+                },
+                radius: Corners { tl: 0.0, tr: corner_r, br: corner_r, bl: self.bottom_offset },
+                logical_inset: LogicalInset { right: corner_r, bottom: self.bottom_offset, ..Default::default() },
+                ..Default::default()
+            },
             Mat3::identity(),
         );
 

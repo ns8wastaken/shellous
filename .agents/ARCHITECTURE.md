@@ -4,7 +4,7 @@
 
 1. `main()` creates an `Arc<dyn Compositor>` (HyprlandCompositor)
 2. `Shell::new()` initializes Wayland globals, EGL context, AND the `WorkspaceService` (which seeds workspace state and installs a compositor subscription)
-3. `bar::mount()` obtains a `WorkspaceHandle` from `Shell::workspace().handle()` and mounts the bar via `SurfaceSpec::Layer(LayerSpec)`
+3. `bar::mount()` mounts the bar via `SurfaceSpec::Layer(LayerSpec)` (the bar receives data later through the `update()` phase)
 4. `Shell::run()` enters the render loop (never returns)
 
 ## Module Dependency Graph
@@ -33,8 +33,9 @@ main.rs
   ├── canvas.rs                 — Canvas drawing surface abstraction
   ├── hyprland.rs               — HyprlandCompositor (Unix socket IPC, impls Compositor)
   └── components/bar/
-        ├── mod.rs              — mount() — composes SurfaceSpec::Layer
-        ├── left.rs             — LeftPanel (workspace indicators)
+        ├── mod.rs              — mount() — composes SurfaceSpec::Layer, layout constants
+        ├── left.rs             — LeftPanel (workspace indicators row)
+        ├── workspace_dot.rs    — WorkspaceDot (single workspace pill indicator)
         └── middle.rs           — MiddlePanel (centered clock/widget)
 ```
 
@@ -52,17 +53,27 @@ main.rs
 ### Render Loop
 ```
 Shell::run()
-  ├── wayland.dispatch_pending()  — drain any events already buffered
-  └── for each dirty surface:
-        ├── request_frame()    — kind.wl_surface().frame(qh, id)
-        ├── renderer.make_current()
-        ├── renderer.render_frame(ctx, || draw_elements())
-        │     ├── glClear + glViewport
-        │     ├── draw closure → Element::draw() for each widget
-        │     │     └── RectProgram::draw() → uniform upload + glDrawArrays
-        │     └── eglSwapBuffers()
-        └── dirty = false
-  └── wayland.blocking_dispatch()  — wait for the next event (typically a frame Done)
+  ├── snapshot = workspace.handle().snapshot()  — initial data push
+  ├── state.update_surfaces(&snapshot)           — push data through element tree
+  ├── wayland.dispatch_pending()                — drain any events already buffered
+  │
+  ├── on workspace change (eventfd wake):
+  │     state.sync_workspace_snapshots()
+  │     state.update_surfaces(&workspace.handle().snapshot())
+  │     → next iteration (tick + render follows)
+  │
+  └── while dirty or animating (0ms poll timeout):
+        ├── state.tick_animations(now)          — interpolate animated values
+        ├── for each dirty surface:
+        │     ├── request_frame()
+        │     ├── renderer.make_current()
+        │     ├── renderer.render_frame(ctx, || root.draw(canvas, ctx))
+        │     │     ├── glClear + glViewport
+        │     │     ├── draw → Element::draw() for each widget
+        │     │     │     └── RectProgram::draw() → uniform upload + glDrawArrays
+        │     │     └── eglSwapBuffers()
+        │     └── dirty = false
+        └── when all animations settle → set_animating(false), clear dirty flags
 ```
 
 ### Input Flow
@@ -78,7 +89,8 @@ wl_pointer events → ShellState Dispatch impls
               └── Element::on_click() → compositor.activate_workspace() etc.
 ```
 
-### Compositor Subscription → WorkspaceService → Bar
+### Compositor Subscription → WorkspaceService → Bar (via update())
+
 ```
 WorkspaceService::new(compositor) called once by Shell::new
   ├── refresh_state(&state)        — synchronous seed: writes workspaces + active_id
@@ -92,11 +104,16 @@ Listener thread (lazily spawned, respawned after panic via ListenerIncarnation D
               ├── snapshot subscriber IDs under brief lock (release lock before invoking)
               └── for each id: take the callback's Arc clone under brief lock, dispatch event.clone()
                     └── WorkspaceService callback mutates its Arc<Mutex<WorkspaceState>>
-                          → next render frame: LeftPanel::draw() calls handle.snapshot()
+                          → shell loop wakes via eventfd → Shell::run() takes one snapshot
 
-bar::mount() obtains a WorkspaceHandle from shell.workspace().handle()
-LeftPanel::new(handle) stores it; every draw() / on_click uses handle.snapshot()
-or handle.read(|s| ...) — no manual mutex juggling in the UI layer.
+Data is pushed, not pulled:
+  Shell::run() takes ONE snapshot, calls ShellState::update_surfaces(&snapshot)
+    → Group::update() → LeftPanel::update() + MiddlePanel::update()
+      → LeftPanel::update() calls padded_row.sync_children() to add/remove/reorder dots
+      → padded_row.update(snapshot) → Row → each WorkspaceDot::update(snapshot)
+        → sets is_active flag
+
+Components never pull from services. Data flows down; clicks flow up.
 ```
 
 ## Key Design Decisions
@@ -116,8 +133,8 @@ Subscriber callbacks take `CompositorEvent` (e.g. `WorkspaceChanged { workspaces
 ### RAII Subscription Cleanup
 `SubscriptionCleanup` (in `src/services/workspace.rs`) wraps `(compositor: Arc<dyn Compositor>, id: SubscriptionId)` and calls `unsubscribe` in its `Drop`. The field is declared LAST in `WorkspaceService` so it drops FIRST (Rust's reverse-declaration drop order) — releasing the callback Arc on shell shutdown rather than leaking it indefinitely.
 
-### Workspace Handle — Snapshot or Read Over Mutex-and-Drop
-`WorkspaceHandle::snapshot()` returns a `Clone` `WorkspaceSnapshot` after one brief lock; `WorkspaceHandle::read(|s| ...)` lets callers compute under the held lock without exposing the `Mutex`. UI components no longer juggle explicit `Mutex::lock` → use → drop.
+### Workspace Handle — Shell-internal Snapshot Source
+`WorkspaceHandle` is used only by the shell runtime (`Shell::run()`) to produce `WorkspaceSnapshot` values. Components receive data through `Element::update()` — they never call `snapshot()` or hold a `WorkspaceHandle`. The brief `Mutex::lock` → snapshot → drop cycle happens once per workspace change, not once per component per frame.
 
 ### Shared GL State via `Arc<EglState>`
 All surfaces share one EGL context (`EglState` owns it). Each `Renderer` holds an `Arc<EglState>` and creates its own `egl::Surface` (window surface). Before drawing, `make_current()` binds that surface.

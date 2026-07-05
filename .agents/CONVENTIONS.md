@@ -30,7 +30,7 @@
 
 ### Trait Objects for Extensibility
 - `Compositor: Send + Sync` — allows compositor backend swapping
-- `Element` — dynamic dispatch for UI widgets (`Vec<Box<dyn Element>>`)
+- `Element` — dynamic dispatch for UI widgets (`Vec<Box<dyn Element>>`). Trait methods: `update()` (receive data), `sync_children()` (reconcile child tree by ID), `tick_animations()` (interpolate animated values), `draw()`, `on_click()`, `id()`, `size()`.
 - `Surface: Send` — implemented by `LayerSurface` and `XdgToplevelSurface`; the polymorphic `SurfaceKind` enum impls `Surface` by pass-through (`match` over variants).
 
 ### Shared State via Arc<Mutex<>> with RAII Handles
@@ -66,7 +66,7 @@ Used for fields / variants / imports that are part of an upcoming feature but no
 
 ### Default Trait
 - Used consistently for leaf-style structs (`RectStyle`, `Corners`, `Color`, `MiddlePanel`)
-- Fallible construction uses `new()`, widgets use `Default` (exception: `LeftPanel::new(handle)` because it requires a `WorkspaceHandle` dependency, not a default)
+- Fallible construction uses `new()`, widgets use `Default` (exception: `LeftPanel::new(bottom_offset)` because of the compositor offset dependency)
 - Service constructors always use `new` (services may require external dependencies)
 
 ### Bitflags
@@ -83,7 +83,7 @@ Used for fields / variants / imports that are part of an upcoming feature but no
 - Trailing commas in struct/macro invocations
 - `use` imports at top of file, grouped by crate then module
 - Explicit `use` imports rather than wildcards (except for protocol enums like `wl_pointer::Event`)
-- Helper functions prefixed with `draw_` for rendering (`draw_background`, `draw_workspace_indicators`)
+- Per-element `draw()` implementations inline all rendering; shared draw helpers live as free functions in the same module
 - `pub` visibility only where needed; module-private helpers remain private
 - Type-level section banners (`// ==================== TYPE NAME ====================`) before each Rust struct/enum and before each trait impl block; the same convention is used for non-Rust file sections (e.g., `// ==================== INTERNAL JSON TYPES ====================` in `hyprland.rs`).
 

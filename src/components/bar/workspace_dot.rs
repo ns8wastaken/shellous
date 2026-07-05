@@ -59,7 +59,6 @@ impl Element for WorkspaceDot {
                 br: WORKSPACE_R,
                 bl: WORKSPACE_R,
             },
-            softness: 0.85,
             ..Default::default()
         };
         surface.draw_rect(
