@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
@@ -93,7 +91,7 @@ impl Element for Padding {
         self.child.on_click(x - self.left, y - self.top, ctx)
     }
 
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
-        self.child.as_any_mut()
+    fn sync_children(&mut self, ids: &[i32], factory: &mut dyn FnMut(i32) -> Box<dyn Element>) {
+        self.child.sync_children(ids, factory);
     }
 }

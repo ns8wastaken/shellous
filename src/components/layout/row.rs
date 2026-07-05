@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
@@ -98,7 +96,18 @@ impl Element for Row {
         false
     }
 
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
-        Some(self)
+    fn sync_children(&mut self, ids: &[i32], factory: &mut dyn FnMut(i32) -> Box<dyn Element>) {
+        let old = std::mem::take(&mut self.children);
+        let mut by_id: Vec<(i32, Box<dyn Element>)> = old
+            .into_iter()
+            .filter_map(|c| c.id().map(|id| (id, c)))
+            .collect();
+
+        for id in ids {
+            match by_id.iter().position(|(eid, _)| eid == id) {
+                Some(idx) => self.children.push(by_id.remove(idx).1),
+                None => self.children.push(factory(*id)),
+            }
+        }
     }
 }
