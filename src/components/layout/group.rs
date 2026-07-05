@@ -48,9 +48,4 @@ impl Element for Group {
         false
     }
 
-    fn sync_children(&mut self, ids: &[i32], factory: &mut dyn FnMut(i32) -> Box<dyn Element>) {
-        for child in &mut self.children {
-            child.sync_children(ids, factory);
-        }
-    }
 }

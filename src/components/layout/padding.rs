@@ -91,7 +91,4 @@ impl Element for Padding {
         self.child.on_click(x - self.left, y - self.top, ctx)
     }
 
-    fn sync_children(&mut self, ids: &[i32], factory: &mut dyn FnMut(i32) -> Box<dyn Element>) {
-        self.child.sync_children(ids, factory);
-    }
 }

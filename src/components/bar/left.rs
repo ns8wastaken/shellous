@@ -1,6 +1,5 @@
-use crate::components::canvas::DrawingSurface;
-use crate::components::layout::padding::Padding;
-use crate::components::layout::row::Row;
+use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::components::keyed_list::KeyedList;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
@@ -12,36 +11,37 @@ use super::{BAR_HEIGHT, workspace_dot::{WorkspaceDot, WORKSPACE_R}};
 
 const WORKSPACE_SPACING: f32 = 8.0;
 
+// Layout constants mirroring the old Padding+Row setup.
+const LEFT_PAD: f32 = BAR_HEIGHT / 2.0;
+const RIGHT_PAD: f32 = BAR_HEIGHT;
+const TOP: f32 = BAR_HEIGHT / 2.0 - WORKSPACE_R;
+
 // ==================== LEFT PANEL ====================
 
 pub struct LeftPanel {
-    padded_row: Padding,
+    dots: KeyedList<i32, WorkspaceDot>,
     panel_width: Animated<f32>,
     bottom_offset: f32,
-    prev_workspace_ids: Vec<i32>,
 }
 
 impl LeftPanel {
     pub fn new(bottom_offset: f32) -> Self {
-        let top = BAR_HEIGHT / 2.0 - WORKSPACE_R;
-        let corner_r = BAR_HEIGHT / 2.0;
-
-        let row = Row::new().spacing(WORKSPACE_SPACING);
-        let padded_row = Padding::new(Box::new(row))
-            .left(corner_r)
-            .top(top)
-            .right(corner_r * 2.0);
-
-        let initial_width = padded_row.size().0;
-
         Self {
-            padded_row,
-            panel_width: Animated::new(initial_width)
+            dots: KeyedList::new(),
+            panel_width: Animated::new(LEFT_PAD + RIGHT_PAD)
                 .with_duration(0.26)
                 .with_easing(Easing::EaseOutCubic),
             bottom_offset,
-            prev_workspace_ids: Vec::new(),
         }
+    }
+
+    fn dot_row_width(&self) -> f32 {
+        let n = self.dots.len();
+        if n == 0 {
+            return 0.0;
+        }
+        self.dots.iter().map(|d| d.size().0).sum::<f32>()
+            + (n as f32 - 1.0) * WORKSPACE_SPACING
     }
 }
 
@@ -49,26 +49,25 @@ impl Element for LeftPanel {
     fn update(&mut self, snapshot: &WorkspaceSnapshot) {
         let mut cur_ids: Vec<i32> = snapshot.workspaces.iter().map(|w| w.id).collect();
         cur_ids.sort_unstable();
-        if cur_ids != self.prev_workspace_ids {
-            self.padded_row.sync_children(&cur_ids, &mut |id| {
-                Box::new(WorkspaceDot::new(id))
-            });
-            self.prev_workspace_ids = cur_ids;
+        self.dots.reconcile(&cur_ids, |id| WorkspaceDot::new(id));
+        for dot in self.dots.iter_mut() {
+            dot.update(snapshot);
         }
-
-        self.padded_row.update(snapshot);
     }
 
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        let row_animating = self.padded_row.tick_animations(absolute_time);
-
-        let target = self.padded_row.size().0;
+        let mut any = false;
+        for dot in self.dots.iter_mut() {
+            if dot.tick_animations(absolute_time) {
+                any = true;
+            }
+        }
+        let target = LEFT_PAD + self.dot_row_width() + RIGHT_PAD;
         if target != self.panel_width.target() {
             self.panel_width.set_target(target, absolute_time);
         }
         let panel_animating = self.panel_width.tick(absolute_time);
-
-        row_animating || panel_animating
+        any || panel_animating
     }
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
@@ -91,10 +90,29 @@ impl Element for LeftPanel {
             Mat3::identity(),
         );
 
-        self.padded_row.draw(surface, ctx);
+        let mut cx = LEFT_PAD;
+        for dot in self.dots.iter() {
+            let tc = TranslatedCanvas::new(surface, cx, TOP);
+            dot.draw(&tc, ctx);
+            cx += dot.size().0 + WORKSPACE_SPACING;
+        }
     }
 
     fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        self.padded_row.on_click(x, y, ctx)
+        let mut cx = LEFT_PAD;
+        for dot in self.dots.iter() {
+            let (dw, dh) = dot.size();
+            if x >= cx && x <= cx + dw && y >= TOP && y <= TOP + dh {
+                if dot.on_click(x - cx, y - TOP, ctx) {
+                    return true;
+                }
+            }
+            cx += dw + WORKSPACE_SPACING;
+        }
+        false
+    }
+
+    fn size(&self) -> (f32, f32) {
+        (self.panel_width.value(), BAR_HEIGHT)
     }
 }

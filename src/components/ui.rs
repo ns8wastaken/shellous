@@ -17,11 +17,6 @@ pub trait Element {
     /// Push new data into the element. Called before tick_animations.
     fn update(&mut self, _snapshot: &WorkspaceSnapshot) {}
 
-    /// Reconcile children against a sorted list of IDs.
-    /// Existing children matching by `.id()` are preserved;
-    /// missing ones are created via `factory`.
-    fn sync_children(&mut self, _ids: &[i32], _factory: &mut dyn FnMut(i32) -> Box<dyn Element>) {}
-
     /// Tick animated properties. Return true if still animating.
     fn tick_animations(&mut self, _absolute_time: f32) -> bool {
         false
