@@ -43,7 +43,7 @@ impl Element for WorkspaceDot {
         self.width.tick(absolute_time)
     }
 
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
+    fn draw(&self, surface: &dyn DrawingSurface, _ctx: &RenderContext) {
         let w = self.width.value();
         let fill = if self.is_active {
             Color { r: 1.0, g: 0.12, b: 0.14, a: 1.0 }

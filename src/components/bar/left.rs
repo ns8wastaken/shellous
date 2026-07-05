@@ -72,21 +72,38 @@ impl Element for LeftPanel {
 
     fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
         let corner_r = (ctx.surface_h - self.bottom_offset) / 2.0;
+        let w = self.panel_width.value();
+        let h = ctx.surface_h;
 
+        let base_style = RectStyle::new()
+            .corners(
+                CornerShape::Convex,
+                CornerShape::Concave,
+                CornerShape::Convex,
+                CornerShape::Concave,
+            )
+            .radius(0.0, corner_r, corner_r, self.bottom_offset)
+            .inset_right(corner_r)
+            .inset_bottom(self.bottom_offset);
+
+
+        // Shadow pass
         surface.draw_rect(
-            self.panel_width.value(),
-            ctx.surface_h,
-            &RectStyle::new()
-                .fill(0.085, 0.095, 0.110, 1.0)
-                .corners(
-                    CornerShape::Convex,
-                    CornerShape::Concave,
-                    CornerShape::Convex,
-                    CornerShape::Concave,
-                )
-                .radius(0.0, corner_r, corner_r, self.bottom_offset)
-                .inset_right(corner_r)
-                .inset_bottom(self.bottom_offset),
+            w, h,
+            &base_style
+                .clone()
+                .fill(0.0, 0.0, 0.0, 1.0)
+                .softness(20.0)
+                .shadow(0.0, 0.0),
+            Mat3::identity(),
+        );
+
+        // Fill pass
+        surface.draw_rect(
+            w, h,
+            &base_style
+                .clone()
+                .fill(0.085, 0.095, 0.110, 1.0),
             Mat3::identity(),
         );
 

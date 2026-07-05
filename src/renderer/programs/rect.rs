@@ -214,6 +214,18 @@ impl RectStyle {
         self.logical_inset.bottom = v;
         self
     }
+
+    pub fn shadow(mut self, dx: f32, dy: f32) -> Self {
+        self.outer_shadow = true;
+        self.shadow_cutout_offset_x = dx;
+        self.shadow_cutout_offset_y = dy;
+        self
+    }
+
+    pub fn softness(mut self, s: f32) -> Self {
+        self.softness = s;
+        self
+    }
 }
 
 // ==================== RECT PROGRAM ====================
