@@ -1,7 +1,7 @@
 use crate::components::canvas::DrawingSurface;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::programs::rect::{
-    Color, Corners, FillMode, LogicalInset, Mat3, RectStyle,
+    Color, CornerShape, Corners, FillMode, LogicalInset, Mat3, RectStyle
 };
 use super::{BAR_HEIGHT, CORNER_RADIUS};
 
@@ -31,19 +31,24 @@ fn draw_background(
     panel_w: f32,
     x: f32,
 ) {
-    let style = RectStyle {
-        fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
-        fill_mode: FillMode::Solid,
-        logical_inset: LogicalInset { right: CORNER_RADIUS, left: CORNER_RADIUS, ..Default::default() },
-        radius: Corners { tl: CORNER_RADIUS, tr: CORNER_RADIUS, br: CORNER_RADIUS, bl: CORNER_RADIUS },
-        ..Default::default()
-    };
     surface.draw_rect(
         surface_w,
         surface_h,
         panel_w,
         panel_h,
-        &style,
+        &RectStyle {
+            fill: Color { r: 0.085, g: 0.095, b: 0.110, a: 1.0 },
+            corners: Corners {
+                tl: CornerShape::Concave,
+                tr: CornerShape::Concave,
+                br: CornerShape::Convex,
+                bl: CornerShape::Convex,
+            },
+            fill_mode: FillMode::Solid,
+            logical_inset: LogicalInset { right: CORNER_RADIUS, left: CORNER_RADIUS, ..Default::default() },
+            radius: Corners { tl: CORNER_RADIUS, tr: CORNER_RADIUS, br: CORNER_RADIUS, bl: CORNER_RADIUS },
+            ..Default::default()
+        },
         Mat3::translation(x, 0.0),
     );
 }

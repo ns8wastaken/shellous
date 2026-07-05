@@ -3,7 +3,7 @@ mod middle;
 mod workspace_dot;
 
 pub(super) const BAR_HEIGHT: f32 = 30.0;
-pub(super) const CORNER_RADIUS: f32 = 12.0;
+pub(super) const CORNER_RADIUS: f32 = BAR_HEIGHT * 0.5;
 
 use crate::components::layout::group::Group;
 use crate::shell::layer_surface::{ShellAnchor, ShellLayer};
