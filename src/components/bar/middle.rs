@@ -45,7 +45,7 @@ fn draw_background(
         panel_w, panel_h,
         &base_style
             .clone()
-            .fill(0.0, 0.0, 0.0, 1.0)
+            .fill(0.0, 0.0, 0.0, 0.5)
             .softness(20.0)
             .shadow(0.0, 0.0),
         Mat3::translation(x, 0.0),
