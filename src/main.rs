@@ -23,6 +23,9 @@ fn main() {
 
     bar::mount(&mut shell);
 
+    // ---- Tray listener (background thread, tokio runtime) ----
+    crate::services::tray::spawn_tray_listener();
+
     // ---- Render loop (never returns) ----
     shell.run();
 }
