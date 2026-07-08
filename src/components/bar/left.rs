@@ -81,7 +81,7 @@ impl Element for LeftPanel {
         let w = self.panel_width.value();
         let h = ctx.surface_h;
 
-        let bg_rect = Rect::new(rect.x, rect.y, w, h);
+        let bg_rect = Rect { w, h, ..rect };
         let base_style = RectStyle::new()
             .corners(
                 CornerShape::Convex,
@@ -112,18 +112,18 @@ impl Element for LeftPanel {
         );
 
         // Dot row
-        let content_rect = Rect::new(rect.x + LEFT_PAD, rect.y + TOP, 0.0, 0.0);
-        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(Size::new(0.0, 0.0))).collect();
-        let dot_rects = stack_horizontal(content_rect, &dot_sizes, WORKSPACE_SPACING);
+        let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
+        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(rect.size())).collect();
+        let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
         for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
             dot.draw(dot_rect, batch, ctx);
         }
     }
 
     fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(Size::new(0.0, 0.0))).collect();
-        let content_rect = Rect::new(rect.x + LEFT_PAD, rect.y + TOP, 0.0, 0.0);
-        let dot_rects = stack_horizontal(content_rect, &dot_sizes, WORKSPACE_SPACING);
+        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(rect.size())).collect();
+        let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
+        let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
         for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
             if dot_rect.contains(x, y) && dot.on_click(dot_rect, x, y, ctx) {
                 return true;

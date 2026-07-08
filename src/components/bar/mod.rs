@@ -5,6 +5,8 @@ mod workspace_dot;
 pub(super) const BAR_HEIGHT: f32 = 30.0;
 pub(super) const CORNER_RADIUS: f32 = BAR_HEIGHT * 0.5;
 
+use crate::components::canvas::Alignment;
+use crate::components::layout::align::Align;
 use crate::components::layout::group::Group;
 use crate::shell::layer_surface::{ShellAnchor, ShellLayer};
 use crate::shell::runtime::{LayerSpec, Shell, SurfaceSpec};
@@ -24,7 +26,10 @@ pub fn mount(shell: &mut Shell) {
         layer: ShellLayer::Top,
         root: Some(Box::new(Group::new(vec![
             Box::new(LeftPanel::new(offset as f32)),
-            Box::new(MiddlePanel::default()),
+            Box::new(Align::new(
+                Box::new(MiddlePanel::default()),
+                Alignment::TopCenter,
+            )),
         ]))),
     }));
 }

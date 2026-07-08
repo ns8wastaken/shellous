@@ -3,7 +3,7 @@ use std::sync::Arc;
 use wayland_egl::WlEglSurface;
 use wayland_client::Proxy;
 
-use crate::renderer::batch::DrawBatch;
+use crate::renderer::batch::{DrawBatch, Shape};
 use crate::renderer::programs::rect::Mat3;
 use crate::shell::egl::EglState;
 use crate::components::ui::RenderContext;
@@ -111,16 +111,22 @@ impl Renderer {
     /// All commands are submitted in order as individual draw calls.
     /// Future: switch to instanced rendering for a single draw call.
     pub fn render_batch(&self, batch: &DrawBatch, surface_w: f32, surface_h: f32) {
-        let prog = self.rect_program();
+        let rect_prog = self.rect_program();
         for cmd in batch.commands() {
-            prog.draw(
-                surface_w,
-                surface_h,
-                cmd.rect.w,
-                cmd.rect.h,
-                &cmd.style,
-                Mat3::translation(cmd.rect.x, cmd.rect.y),
-            );
+            match cmd.shape {
+                Shape::Rect => rect_prog.draw(
+                    surface_w,
+                    surface_h,
+                    cmd.rect.w,
+                    cmd.rect.h,
+                    &cmd.style,
+                    Mat3::translation(cmd.rect.x, cmd.rect.y),
+                ),
+                Shape::Circle => {
+                    // Placeholder for CircleProgram — shaders exist at
+                    // src/renderer/shaders/circle.vert / circle.frag
+                }
+            }
         }
     }
 }

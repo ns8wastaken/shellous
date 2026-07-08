@@ -47,47 +47,114 @@ impl Rect {
             h: (self.h - t - b).max(0.0),
         }
     }
+
+    pub fn place_center(self, child: Size) -> Self {
+        Self {
+            x: self.x + (self.w - child.w) * 0.5,
+            y: self.y + (self.h - child.h) * 0.5,
+            w: child.w,
+            h: child.h,
+        }
+    }
+
+    pub fn place_left_center(self, child: Size) -> Self {
+        Self {
+            x: self.x,
+            y: self.y + (self.h - child.h) * 0.5,
+            w: child.w,
+            h: child.h,
+        }
+    }
+
+    pub fn place_right_center(self, child: Size) -> Self {
+        Self {
+            x: self.x + self.w - child.w,
+            y: self.y + (self.h - child.h) * 0.5,
+            w: child.w,
+            h: child.h,
+        }
+    }
+
+    pub fn place_top_left(self, child: Size) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            w: child.w,
+            h: child.h,
+        }
+    }
+
+    pub fn place_top_center(self, child: Size) -> Self {
+        Self {
+            x: self.x + (self.w - child.w) * 0.5,
+            y: self.y,
+            w: child.w,
+            h: child.h,
+        }
+    }
+
+    pub fn place_bottom_left(self, child: Size) -> Self {
+        Self {
+            x: self.x,
+            y: self.y + self.h - child.h,
+            w: child.w,
+            h: child.h,
+        }
+    }
+}
+
+// ==================== ALIGNMENT ====================
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Alignment {
+    #[default]
+    Fill,
+    Center,
+    TopCenter,
+    Start,
+    End,
+}
+
+impl Alignment {
+    pub fn apply(self, parent: Rect, child: Size) -> Rect {
+        match self {
+            Alignment::Fill      => parent,
+            Alignment::Center    => parent.place_center(child),
+            Alignment::TopCenter => parent.place_top_center(child),
+            Alignment::Start     => parent.place_left_center(child),
+            Alignment::End       => parent.place_right_center(child),
+        }
+    }
 }
 
 // ==================== ALIGNMENT HELPERS ====================
 
-/// Returns (x, y) to place `child` at the left edge, vertically centered.
-pub fn align_left_center(parent: Rect, child: Size) -> (f32, f32) {
-    (parent.x, parent.y + (parent.h - child.h) * 0.5)
+pub fn align_center(parent: Rect, child: Size) -> Rect {
+    parent.place_center(child)
 }
 
-/// Returns (x, y) to place `child` at the right edge, vertically centered.
-pub fn align_right_center(parent: Rect, child: Size) -> (f32, f32) {
-    (parent.x + parent.w - child.w, parent.y + (parent.h - child.h) * 0.5)
+pub fn align_left_center(parent: Rect, child: Size) -> Rect {
+    parent.place_left_center(child)
 }
 
-/// Returns (x, y) to place `child` centered both axes.
-pub fn align_center(parent: Rect, child: Size) -> (f32, f32) {
-    (
-        parent.x + (parent.w - child.w) * 0.5,
-        parent.y + (parent.h - child.h) * 0.5,
-    )
+pub fn align_right_center(parent: Rect, child: Size) -> Rect {
+    parent.place_right_center(child)
 }
 
-/// Returns (x, y) to place `child` at top-left.
-pub fn align_top_left(parent: Rect, _child: Size) -> (f32, f32) {
-    (parent.x, parent.y)
+pub fn align_top_left(parent: Rect, child: Size) -> Rect {
+    parent.place_top_left(child)
 }
 
-/// Returns (x, y) to place `child` at top-center.
-pub fn align_top_center(parent: Rect, child: Size) -> (f32, f32) {
-    (parent.x + (parent.w - child.w) * 0.5, parent.y)
+pub fn align_top_center(parent: Rect, child: Size) -> Rect {
+    parent.place_top_center(child)
 }
 
-/// Returns (x, y) to place `child` at bottom-left.
-pub fn align_bottom_left(parent: Rect, child: Size) -> (f32, f32) {
-    (parent.x, parent.y + parent.h - child.h)
+pub fn align_bottom_left(parent: Rect, child: Size) -> Rect {
+    parent.place_bottom_left(child)
 }
 
 // ==================== STACK LAYOUT ====================
 
-/// Arrange `sizes` horizontally within `bounds` with `spacing` between items.
-/// Returns the absolute `Rect` for each item, left-to-right.
 pub fn stack_horizontal(bounds: Rect, sizes: &[Size], spacing: f32) -> Vec<Rect> {
     let mut cx = bounds.x;
     let mut rects = Vec::with_capacity(sizes.len());
@@ -98,8 +165,6 @@ pub fn stack_horizontal(bounds: Rect, sizes: &[Size], spacing: f32) -> Vec<Rect>
     rects
 }
 
-/// Arrange `sizes` vertically within `bounds` with `spacing` between items.
-/// Returns the absolute `Rect` for each item, top-to-bottom.
 pub fn stack_vertical(bounds: Rect, sizes: &[Size], spacing: f32) -> Vec<Rect> {
     let mut cy = bounds.y;
     let mut rects = Vec::with_capacity(sizes.len());
