@@ -1,4 +1,4 @@
-use crate::components::canvas::{Rect, Size};
+use crate::components::rect::{Rect, Size};
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::batch::DrawBatch;
 use crate::renderer::programs::rect::{

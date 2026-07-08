@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use crate::components::canvas::Rect;
+use crate::components::rect::Rect;
 use crate::components::ui::RenderContext;
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;

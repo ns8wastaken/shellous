@@ -1,4 +1,5 @@
-use crate::components::canvas::{Rect, Size, stack_horizontal};
+use crate::components::layout::stack_horizontal;
+use crate::components::rect::{Rect, Size};
 use crate::components::keyed_list::KeyedList;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;

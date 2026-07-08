@@ -1,5 +1,5 @@
-use crate::components::canvas::{Size, stack_horizontal};
-use crate::components::canvas::Rect;
+use crate::components::layout::stack_horizontal;
+use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};

@@ -30,8 +30,21 @@
 
 ### Trait Objects for Extensibility
 - `Compositor: Send + Sync` — allows compositor backend swapping
-- `Element` — dynamic dispatch for UI widgets (`Vec<Box<dyn Element>>`). Trait methods: `update()` (receive data), `sync_children()` (reconcile child tree by ID), `tick_animations()` (interpolate animated values), `draw()`, `on_click()`, `id()`, `size()`.
+- `Element` — dynamic dispatch for UI widgets (`Vec<Box<dyn Element>>`). Trait methods: `update()` (receive data), `tick_animations()` (interpolate animated values), `layout()` (CPU-only size computation), `draw(rect, batch, ctx)` (collect draw commands into `DrawBatch`), `on_click(rect, x, y, ctx)` (hit test), `id()`.
 - `Surface: Send` — implemented by `LayerSurface` and `XdgToplevelSurface`; the polymorphic `SurfaceKind` enum impls `Surface` by pass-through (`match` over variants).
+
+### Three-Pass Rendering
+Rendering is split into three decoupled phases:
+1. **Layout (`layout()`)** — CPU only, computes element sizes given available space, returns `Size`
+2. **Geometry batching (`draw()`)** — CPU memory, collects `DrawCommand` structs into a `DrawBatch` via `batch.push(rect, &style)`. No GPU calls.
+3. **GPU render (`render_batch()`)** — iterates commands, matches on `Shape` (`Rect`, `Circle`), issues `glDrawArrays` per draw call. Future: instancing.
+
+### Declarative Layout Without Coordinates
+Element `draw()` methods never see raw `x`/`y` coordinates. Position is given by the `rect` parameter. Elements draw at the given rect using `batch.push(rect, &style)`. Positioning is handled by:
+- `Align` container + `Alignment` enum
+- `Rect::place_center(child)`, `Rect::inset(l,t,r,b)` — return `Rect` directly
+- `stack_horizontal(bounds, sizes, spacing)` — pure function, returns `Vec<Rect>`
+- `rect.place_center(size)` instead of `let (x, y) = align_center(parent, child); Rect::new(x, y, w, h)`
 
 ### Shared State via Arc<Mutex<>> with RAII Handles
 - `WorkspaceState` is owned by `WorkspaceService` (`src/services/workspace.rs`), wrapped in `Arc<Mutex<WorkspaceState>>`
@@ -83,7 +96,7 @@ Used for fields / variants / imports that are part of an upcoming feature but no
 - Trailing commas in struct/macro invocations
 - `use` imports at top of file, grouped by crate then module
 - Explicit `use` imports rather than wildcards (except for protocol enums like `wl_pointer::Event`)
-- Per-element `draw()` implementations inline all rendering; shared draw helpers live as free functions in the same module
+- Per-element `draw()` implementations push to `batch` via `batch.push(rect, &style)`; shared draw helpers live as free functions in the same module
 - `pub` visibility only where needed; module-private helpers remain private
 - Type-level section banners (`// ==================== TYPE NAME ====================`) before each Rust struct/enum and before each trait impl block; the same convention is used for non-Rust file sections (e.g., `// ==================== INTERNAL JSON TYPES ====================` in `hyprland.rs`).
 

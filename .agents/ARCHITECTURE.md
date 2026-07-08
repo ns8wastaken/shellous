@@ -18,25 +18,38 @@ main.rs
   │     ├── xdg_surface.rs      — XdgToplevelSurface (impls Surface; pass-2 scaffold)
   │     ├── runtime.rs          — Shell + SurfaceSpec/LayerSpec/ToplevelSpec (mount)
   │     ├── state.rs            — ShellState (shared mutable state across dispatch/render)
-  │     ├── managed_surface.rs  — ManagedSurface (per-surface state + Element list + kind)
+  │     ├── managed_surface.rs  — ManagedSurface (per-surface state + Element tree + renderer)
   │     ├── wayland.rs          — WaylandState (conn + all globals), Dispatch impls
-  │     ├── egl.rs              — EglState (shared GL context + RectProgram)
+  │     ├── egl.rs              — EglState (shared EGL context + RectProgram)
   │     └── surface_id.rs       — SurfaceId = usize
   ├── services/
   │     └── workspace.rs        — WorkspaceService, WorkspaceHandle, SubscriptionCleanup (RAII)
   ├── renderer/
   │     ├── mod.rs              — re-exports Renderer
-  │     ├── renderer.rs         — Renderer (per-surface EGL surface + draw loop)
+  │     ├── renderer.rs         — Renderer (per-surface EGL surface + render_batch)
+  │     ├── batch.rs            — DrawBatch, DrawCommand, Shape enum
   │     ├── programs/rect.rs    — RectProgram (GLSL shader + VBO + uniform upload)
   │     └── shaders/            — .vert / .frag GLSL sources
-  ├── ui.rs                     — Element trait, RenderContext, draw/click dispatch helpers
-  ├── canvas.rs                 — Canvas drawing surface abstraction
-  ├── hyprland.rs               — HyprlandCompositor (Unix socket IPC, impls Compositor)
-  └── components/bar/
-        ├── mod.rs              — mount() — composes SurfaceSpec::Layer, layout constants
-        ├── left.rs             — LeftPanel (workspace indicators row)
-        ├── workspace_dot.rs    — WorkspaceDot (single workspace pill indicator)
-        └── middle.rs           — MiddlePanel (centered clock/widget)
+  ├── components/
+  │     ├── rect.rs             — Rect, Size (geometry primitives + placement methods)
+  │     ├── ui.rs               — Element trait, RenderContext
+  │     ├── keyed_list.rs       — KeyedList<K,V> reconciler
+  │     ├── layout/
+  │     │     ├── mod.rs        — re-exports Alignment, stack_horizontal
+  │     │     ├── align.rs      — Align container (wraps child with alignment)
+  │     │     ├── alignment.rs  — Alignment enum + align_* helper functions
+  │     │     ├── stacks.rs     — stack_horizontal, stack_vertical layout algorithms
+  │     │     ├── group.rs      — Group container (pass-through, children overlap)
+  │     │     ├── padding.rs    — Padding container (insets child)
+  │     │     └── row.rs        — Row container (horizontal layout via stack_horizontal)
+  │     └── bar/
+  │           ├── mod.rs        — mount() — composes SurfaceSpec::Layer, layout constants
+  │           ├── left.rs       — LeftPanel (workspace indicators row)
+  │           ├── workspace_dot.rs — WorkspaceDot (single workspace pill indicator)
+  │           └── middle.rs     — MiddlePanel (centered clock/widget, wrapped in Align)
+  ├── services/ (deprecated)
+  │     └── hyprland.rs         — HyprlandCompositor (Unix socket IPC, impls Compositor)
+  └── main.rs                   — Entry point: wires compositor, shell, and bar together
 ```
 
 ## Data Flow
@@ -46,34 +59,31 @@ main.rs
 2. Matches on `SurfaceSpec`:
    - `Layer(LayerSpec)` → `LayerSurface::new(...)` — sets anchor + size + exclusive_zone, commits
    - `Toplevel(ToplevelSpec)` → `XdgToplevelSurface::new(...)` — sets title + app_id + min/max_size, commits
-3. Registers a `ManagedSurface { id, elements, kind: SurfaceKind, renderer: None, ... }`
+3. Registers a `ManagedSurface { id, root, kind: SurfaceKind, renderer: None, ... }`
 4. `wayland.wait_for_configure(state, kind.surface_state())` blocks until the protocol-specific `Dispatch` (`ZwlrLayerSurfaceV1::Configure` or `XdgSurface::Configure`) flips `configured = true`
 5. The renderer is built using `kind.wl_surface()` + the assigned `kind.dimensions()`
 
-### Render Loop
+### Three-Pass Render Pipeline
 ```
 Shell::run()
-  ├── snapshot = workspace.handle().snapshot()  — initial data push
-  ├── state.update_surfaces(&snapshot)           — push data through element tree
-  ├── wayland.dispatch_pending()                — drain any events already buffered
-  │
-  ├── on workspace change (eventfd wake):
-  │     state.sync_workspace_snapshots()
-  │     state.update_surfaces(&workspace.handle().snapshot())
-  │     → next iteration (tick + render follows)
-  │
-  └── while dirty or animating (0ms poll timeout):
-        ├── state.tick_animations(now)          — interpolate animated values
-        ├── for each dirty surface:
-        │     ├── request_frame()
-        │     ├── renderer.make_current()
-        │     ├── renderer.render_frame(ctx, || root.draw(canvas, ctx))
-        │     │     ├── glClear + glViewport
-        │     │     ├── draw → Element::draw() for each widget
-        │     │     │     └── RectProgram::draw() → uniform upload + glDrawArrays
-        │     │     └── eglSwapBuffers()
-        │     └── dirty = false
-        └── when all animations settle → set_animating(false), clear dirty flags
+
+  Pass 1 — Update + Layout (CPU only):
+    state.update_surfaces(&snapshot)    — push data through element tree
+    state.tick_animations(now)          — interpolate animated values
+    root.layout(available_size)         — compute desired sizes, no side effects
+
+  Pass 2 — Geometry Batching (CPU memory):
+    root.draw(root_rect, &mut batch, ctx) — collect DrawCommands into DrawBatch
+    Elements push rect + style via batch.push(rect, &style)
+    No GPU calls — purely building a command list
+
+  Pass 3 — GPU Render (GPU):
+    renderer.render_frame(ctx, || renderer.render_batch(&batch, w, h))
+      ├── glClear + glViewport
+      ├── match cmd.shape:
+      │     Shape::Rect → RectProgram::draw() → uniform upload + glDrawArrays
+      │     Shape::Circle → placeholder (shaders exist, not wired)
+      └── eglSwapBuffers()
 ```
 
 ### Input Flow
@@ -85,7 +95,7 @@ wl_pointer events → ShellState Dispatch impls
   ├── Motion → update pointer_pos
   ├── Leave → focused_surface = None, pointer_pos = None
   └── Button (BTN_LEFT press) → state.handle_click()
-        └── find focused surface → click_elements() in reverse z-order
+        └── find focused surface → root.on_click(root_rect, x, y, ctx)
               └── Element::on_click() → compositor.activate_workspace() etc.
 ```
 
@@ -108,15 +118,27 @@ Listener thread (lazily spawned, respawned after panic via ListenerIncarnation D
 
 Data is pushed, not pulled:
   Shell::run() takes ONE snapshot, calls ShellState::update_surfaces(&snapshot)
-    → Group::update() → LeftPanel::update() + MiddlePanel::update()
-      → LeftPanel::update() calls padded_row.sync_children() to add/remove/reorder dots
-      → padded_row.update(snapshot) → Row → each WorkspaceDot::update(snapshot)
-        → sets is_active flag
+    → Group::update() → LeftPanel::update() + Align→MiddlePanel::update()
+      → LeftPanel::update() calls dots.reconcile() to add/remove/reorder dots
+      → each WorkspaceDot::update(snapshot) → sets is_active flag
 
 Components never pull from services. Data flows down; clicks flow up.
 ```
 
 ## Key Design Decisions
+
+### Three-Pass Rendering (Layout → Batch → GPU)
+Rendering is split into three decoupled phases. **Pass 1** (`update/layout`) runs on the CPU and computes all element sizes via `layout()`. **Pass 2** (`geometry batching`) collects `DrawCommand` structs into a `DrawBatch` — still CPU memory, no GPU calls. **Pass 3** (`GPU render`) submits the entire batch: the renderer loops over commands, matches on `Shape` to select the shader program, and issues `glDrawArrays`. This separation makes it trivial to add instancing later (swap the loop for a single instanced call) and keeps all coordinate math (alignment, stacking) in CPU-only code.
+
+### Declarative Layout Without Coordinates
+Elements never see raw `x`/`y` coordinates in `draw()`. Positioning is handled by:
+- **`Alignment` enum** (`Center`, `TopCenter`, `Start`, `End`, `Fill`) — applied by the `Align` container wrapper
+- **`Rect::place_center(child)`, `Rect::inset(l,t,r,b)`** — return positioned `Rect` values, never `(f32, f32)` tuples
+- **`stack_horizontal(bounds, sizes, spacing)`** — arranges children left-to-right
+All layout computations are pure functions over `Rect` and `Size`. The `Align` container (`layout/align.rs`) wraps any child and resolves its position based on alignment. Components like `MiddlePanel` just draw at the `rect` they receive.
+
+### Shape Extensibility
+`DrawCommand` carries a `Shape` enum (`Rect`, `Circle`) rather than hardcoding a single shape type. The renderer dispatches on shape in a single match arm. Adding a new shape means: add a variant, add a `CircleProgram` (or similar), add an arm in `render_batch`. The batch and pipeline schema stay unchanged. Existing `batch.push(rect, &style)` still works — it defaults to `Shape::Rect`.
 
 ### Trait-based Compositor Abstraction
 The `Compositor` trait (`src/shell/compositor.rs`) decouples workspace queries from any specific backend. Currently only `HyprlandCompositor` exists, but other compositors (sway, niri) could be added by implementing the trait. Multi-subscriber; `subscribe_workspace_change(callback) -> SubscriptionId` and `unsubscribe(id) -> bool` provide explicit lifecycle.
@@ -154,6 +176,6 @@ A `Surface` trait abstracts the operations the render loop + dispatch need: `dim
 ### Thread Safety for Workspace State
 `WorkspaceState` lives inside `WorkspaceService` (`src/services/workspace.rs`), wrapped in `Arc<Mutex<WorkspaceState>>` shared between:
 - **Hyprland event listener thread** (writes via the singleton `WorkspaceService` callback)
-- **Main render thread** (reads via `WorkspaceHandle::snapshot()` / `read(|s|)` in `LeftPanel::draw()`)
+- **Main render thread** (reads via `WorkspaceHandle::snapshot()` / `read(|s|)` in `LeftPanel::update()`)
 
 Components never see the `Mutex` directly — locks are acquired and released briefly through the handle. No manual lock-and-drop dance at the UI layer.

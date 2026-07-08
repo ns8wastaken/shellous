@@ -1,4 +1,5 @@
-use crate::components::canvas::{Alignment, Rect, Size};
+use crate::components::layout::Alignment;
+use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};

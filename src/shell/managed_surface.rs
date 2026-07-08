@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use wayland_client::QueueHandle;
 
-use crate::components::canvas::{Rect, Size};
+use crate::components::rect::{Rect, Size};
 use crate::components::ui::{Element, RenderContext};
 use crate::shell::state::ShellState;
 use crate::shell::surface::{Surface, SurfaceKind};

@@ -1,4 +1,4 @@
-use crate::components::canvas::Rect;
+use crate::components::rect::Rect;
 use crate::renderer::programs::rect::RectStyle;
 
 // ==================== SHAPE ====================
