@@ -2,9 +2,8 @@ use std::cell::Cell;
 
 use wayland_client::QueueHandle;
 
-use crate::components::canvas::Canvas;
+use crate::components::canvas::{Rect, Size};
 use crate::components::ui::{Element, RenderContext};
-use crate::renderer::Renderer;
 use crate::shell::state::ShellState;
 use crate::shell::surface::{Surface, SurfaceKind};
 use crate::shell::surface_id::SurfaceId;
@@ -13,7 +12,7 @@ pub struct ManagedSurface {
     pub id: SurfaceId,
     pub root: Option<Box<dyn Element>>,
     pub kind: SurfaceKind,
-    pub renderer: Option<Renderer>,
+    pub renderer: Option<crate::renderer::Renderer>,
     pub frame_pending: Cell<bool>,
     pub dirty: Cell<bool>,
 }
@@ -26,6 +25,11 @@ impl ManagedSurface {
             surface_w: w as f32,
             surface_h: h as f32,
         }
+    }
+
+    pub fn root_size(&self) -> Size {
+        let (w, h) = self.kind.dimensions();
+        Size { w: w as f32, h: h as f32 }
     }
 
     pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
@@ -41,15 +45,11 @@ impl ManagedSurface {
         }
     }
 
-    pub fn draw(&self, canvas: &Canvas, ctx: &RenderContext) {
-        if let Some(ref root) = self.root {
-            root.draw(canvas, ctx);
-        }
-    }
-
     pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) {
         if let Some(ref root) = self.root {
-            root.on_click(x, y, ctx);
+            let root_size = self.root_size();
+            let root_rect = Rect::from_size(root_size);
+            root.on_click(root_rect, x, y, ctx);
         }
     }
 }

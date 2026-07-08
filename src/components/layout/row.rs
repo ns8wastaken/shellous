@@ -1,14 +1,11 @@
-use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::components::canvas::{Size, stack_horizontal};
+use crate::components::canvas::Rect;
+use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
 
 // ==================== ROW ====================
 
-/// A horizontally-arranged group of child elements with consistent spacing.
-///
-/// Children are drawn at `(cursor_x, 0)` where `cursor_x` advances by
-/// `child.size().0 + self.spacing`. Position the row itself by wrapping it
-/// in a `TranslatedCanvas` — Row always treats its own origin as (0, 0).
 pub struct Row {
     pub children: Vec<Box<dyn Element>>,
     spacing: f32,
@@ -29,14 +26,8 @@ impl Row {
 }
 
 impl Row {
-    fn layout(&self) -> Vec<f32> {
-        let mut cx = 0.0;
-        let mut offsets = Vec::with_capacity(self.children.len());
-        for c in &self.children {
-            offsets.push(cx);
-            cx += c.size().0 + self.spacing;
-        }
-        offsets
+    fn child_layouts(&self, available: Size) -> Vec<Size> {
+        self.children.iter().map(|c| c.layout(available)).collect()
     }
 }
 
@@ -57,42 +48,34 @@ impl Element for Row {
         active
     }
 
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
-        for (child, cx) in self.children.iter().zip(self.layout()) {
-            let tc = TranslatedCanvas::new(surface, cx, 0.0);
-            child.draw(&tc, ctx);
+    fn layout(&self, available: Size) -> Size {
+        let sizes = self.child_layouts(available);
+        let total_w: f32 = sizes.iter().map(|s| s.w).sum();
+        let spacing_w = if sizes.len() > 1 {
+            (sizes.len() - 1) as f32 * self.spacing
+        } else {
+            0.0
+        };
+        let max_h = sizes.iter().map(|s| s.h).fold(0.0f32, f32::max);
+        Size { w: total_w + spacing_w, h: max_h }
+    }
+
+    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext) {
+        let sizes = self.child_layouts(rect.size());
+        let child_rects = stack_horizontal(rect, &sizes, self.spacing);
+        for (child, child_rect) in self.children.iter().zip(child_rects) {
+            child.draw(child_rect, batch, ctx);
         }
     }
 
-    fn size(&self) -> (f32, f32) {
-        let offsets = self.layout();
-        let width = match offsets.last() {
-            Some(&last) => {
-                let idx = offsets.len() - 1;
-                last + self.children[idx].size().0
-            }
-            None => 0.0,
-        };
-        let height = self
-            .children
-            .iter()
-            .map(|c| c.size().1)
-            .fold(0.0f32, f32::max);
-        (width, height)
-    }
-
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let offsets = self.layout();
-        for (i, child) in self.children.iter().enumerate().rev() {
-            let px = offsets[i];
-            let (cw, ch) = child.size();
-            if x >= px && x <= px + cw && y >= 0.0 && y <= ch {
-                if child.on_click(x - px, y, ctx) {
-                    return true;
-                }
+    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        let sizes = self.child_layouts(rect.size());
+        let child_rects = stack_horizontal(rect, &sizes, self.spacing);
+        for (child, child_rect) in self.children.iter().zip(child_rects).rev() {
+            if child_rect.contains(x, y) && child.on_click(child_rect, x, y, ctx) {
+                return true;
             }
         }
         false
     }
-
 }

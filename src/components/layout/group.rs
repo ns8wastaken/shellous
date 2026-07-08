@@ -1,11 +1,12 @@
-use crate::components::canvas::DrawingSurface;
+use crate::components::canvas::{Rect, Size};
+use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
 
 // ==================== GROUP ====================
 
 /// A container that holds child elements and delegates to each sequentially.
-/// Children position themselves — Group applies no layout transformation.
+/// Children receive the same rect — Group applies no layout constraint.
 pub struct Group {
     pub children: Vec<Box<dyn Element>>,
 }
@@ -33,19 +34,23 @@ impl Element for Group {
         active
     }
 
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
+    fn layout(&self, available: Size) -> Size {
+        // Group takes all available space
+        available
+    }
+
+    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext) {
         for child in &self.children {
-            child.draw(surface, ctx);
+            child.draw(rect, batch, ctx);
         }
     }
 
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
+    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
         for child in self.children.iter().rev() {
-            if child.on_click(x, y, ctx) {
+            if child.on_click(rect, x, y, ctx) {
                 return true;
             }
         }
         false
     }
-
 }

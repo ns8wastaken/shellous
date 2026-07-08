@@ -3,6 +3,8 @@ use std::sync::Arc;
 use wayland_egl::WlEglSurface;
 use wayland_client::Proxy;
 
+use crate::renderer::batch::DrawBatch;
+use crate::renderer::programs::rect::Mat3;
 use crate::shell::egl::EglState;
 use crate::components::ui::RenderContext;
 
@@ -103,5 +105,22 @@ impl Renderer {
 
     pub fn rect_program(&self) -> &crate::renderer::programs::rect::RectProgram {
         &self.egl.rect_program
+    }
+
+    /// Submit a batch of draw commands to the GPU.
+    /// All commands are submitted in order as individual draw calls.
+    /// Future: switch to instanced rendering for a single draw call.
+    pub fn render_batch(&self, batch: &DrawBatch, surface_w: f32, surface_h: f32) {
+        let prog = self.rect_program();
+        for cmd in batch.commands() {
+            prog.draw(
+                surface_w,
+                surface_h,
+                cmd.rect.w,
+                cmd.rect.h,
+                &cmd.style,
+                Mat3::translation(cmd.rect.x, cmd.rect.y),
+            );
+        }
     }
 }

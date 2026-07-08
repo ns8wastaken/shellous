@@ -1,7 +1,8 @@
-use crate::components::canvas::DrawingSurface;
+use crate::components::canvas::{Rect, Size, align_top_center};
 use crate::components::ui::{Element, RenderContext};
+use crate::renderer::batch::DrawBatch;
 use crate::renderer::programs::rect::{
-    CornerShape, Mat3, RectStyle,
+    CornerShape, RectStyle,
 };
 use super::{BAR_HEIGHT, CORNER_RADIUS};
 
@@ -16,18 +17,21 @@ impl Default for MiddlePanel {
 }
 
 impl Element for MiddlePanel {
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
+    fn layout(&self, _available: Size) -> Size {
+        Size { w: self.width, h: BAR_HEIGHT }
+    }
+
+    fn draw(&self, rect: Rect, batch: &mut DrawBatch, _ctx: &RenderContext) {
         let panel_h = BAR_HEIGHT;
-        let x = ((ctx.surface_w - self.width) * 0.5).max(0.0);
-        draw_background(surface, panel_h, self.width, x);
+        let (x, y) = align_top_center(rect, Size::new(self.width, panel_h));
+        let bg_rect = Rect::new(x, y, self.width, panel_h);
+        draw_background(bg_rect, batch);
     }
 }
 
 fn draw_background(
-    surface: &dyn DrawingSurface,
-    panel_h: f32,
-    panel_w: f32,
-    x: f32,
+    rect: Rect,
+    batch: &mut DrawBatch,
 ) {
     let base_style = RectStyle::new()
         .corners(
@@ -40,21 +44,17 @@ fn draw_background(
         .inset_left(CORNER_RADIUS)
         .inset_right(CORNER_RADIUS);
 
-    // Shadow pass
-    surface.draw_rect(
-        panel_w, panel_h,
+    batch.push(
+        rect,
         &base_style
             .clone()
             .fill(0.0, 0.0, 0.0, 0.5)
             .softness(20.0)
             .shadow(0.0, 0.0),
-        Mat3::translation(x, 0.0),
     );
 
-    // Fill pass
-    surface.draw_rect(
-        panel_w, panel_h,
+    batch.push(
+        rect,
         &base_style.fill(0.085, 0.095, 0.110, 1.0),
-        Mat3::translation(x, 0.0),
     );
 }

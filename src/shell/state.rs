@@ -1,8 +1,9 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use crate::components::canvas::Canvas;
+use crate::components::canvas::Rect;
 use crate::components::ui::RenderContext;
+use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::shell::compositor::Compositor;
 use crate::shell::managed_surface::ManagedSurface;
@@ -94,7 +95,10 @@ impl ShellState {
         still_moving
     }
 
-    /// Render phase — draw all dirty surfaces.
+    /// Render phase — three-pass pipeline:
+    ///   1. Layout (CPU only)
+    ///   2. Geometry batching (CPU memory)
+    ///   3. GPU render
     pub fn render(&self) {
         for entry in &self.surfaces {
             if !entry.dirty.get() || entry.renderer.is_none() {
@@ -103,9 +107,21 @@ impl ShellState {
             let renderer = entry.renderer.as_ref().unwrap();
             renderer.make_current();
             let ctx = entry.render_context(self);
-            let canvas = Canvas::new(renderer.rect_program(), ctx.surface_w, ctx.surface_h);
+
+            // Pass 1: Layout (CPU only)
+            let surface_size = entry.root_size();
+            let root_size = entry.root.as_ref().map_or(surface_size, |r| r.layout(surface_size));
+
+            // Pass 2: Geometry batching (CPU memory)
+            let mut batch = DrawBatch::new();
+            let root_rect = Rect::from_size(root_size);
+            if let Some(ref root) = entry.root {
+                root.draw(root_rect, &mut batch, &ctx);
+            }
+
+            // Pass 3: GPU render
             renderer.render_frame(&ctx, || {
-                entry.draw(&canvas, &ctx);
+                renderer.render_batch(&batch, ctx.surface_w, ctx.surface_h);
             });
         }
     }

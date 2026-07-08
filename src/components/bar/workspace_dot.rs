@@ -1,9 +1,10 @@
-use crate::components::canvas::{DrawingSurface, Rect};
+use crate::components::canvas::{Rect, Size};
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
+use crate::renderer::batch::DrawBatch;
 use crate::renderer::programs::rect::{
-    Color, Mat3, RectStyle,
+    Color, RectStyle,
 };
 use crate::services::workspace::WorkspaceSnapshot;
 
@@ -43,23 +44,21 @@ impl Element for WorkspaceDot {
         self.width.tick(absolute_time)
     }
 
-    fn draw(&self, surface: &dyn DrawingSurface, _ctx: &RenderContext) {
-        let w = self.width.value();
+    fn layout(&self, _available: Size) -> Size {
+        Size { w: self.width.value(), h: WORKSPACE_R * 2.0 }
+    }
+
+    fn draw(&self, rect: Rect, batch: &mut DrawBatch, _ctx: &RenderContext) {
         let fill = if self.is_active {
             Color { r: 1.0, g: 0.12, b: 0.14, a: 1.0 }
         } else {
             Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
         };
-        surface.draw_rect(
-            w,
-            WORKSPACE_R * 2.0,
-            &RectStyle::solid(fill, WORKSPACE_R),
-            Mat3::identity(),
-        );
+        batch.push(rect, &RectStyle::solid(fill, WORKSPACE_R));
     }
 
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        Rect::from_size(self.width.value(), WORKSPACE_R * 2.0).contains(x, y) && {
+    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        rect.contains(x, y) && {
             ctx.state.compositor.activate_workspace(self.workspace_id);
             true
         }
@@ -67,9 +66,5 @@ impl Element for WorkspaceDot {
 
     fn id(&self) -> Option<i32> {
         Some(self.workspace_id)
-    }
-
-    fn size(&self) -> (f32, f32) {
-        (self.width.value(), WORKSPACE_R * 2.0)
     }
 }

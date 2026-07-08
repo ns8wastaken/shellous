@@ -1,17 +1,17 @@
-use crate::components::canvas::{DrawingSurface, TranslatedCanvas};
+use crate::components::canvas::{Rect, Size, stack_horizontal};
 use crate::components::keyed_list::KeyedList;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
+use crate::renderer::batch::DrawBatch;
 use crate::renderer::programs::rect::{
-    CornerShape, Mat3, RectStyle,
+    CornerShape, RectStyle,
 };
 use crate::services::workspace::WorkspaceSnapshot;
 use super::{BAR_HEIGHT, workspace_dot::{WorkspaceDot, WORKSPACE_R}};
 
 const WORKSPACE_SPACING: f32 = 8.0;
 
-// Layout constants mirroring the old Padding+Row setup.
 const LEFT_PAD: f32 = BAR_HEIGHT / 2.0;
 const RIGHT_PAD: f32 = BAR_HEIGHT;
 const TOP: f32 = BAR_HEIGHT / 2.0 - WORKSPACE_R;
@@ -35,12 +35,13 @@ impl LeftPanel {
         }
     }
 
-    fn dot_row_width(&self) -> f32 {
+    fn dot_row_width(&self, available: Size) -> f32 {
         let n = self.dots.len();
         if n == 0 {
             return 0.0;
         }
-        self.dots.iter().map(|d| d.size().0).sum::<f32>()
+        let sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(available)).collect();
+        sizes.iter().map(|s| s.w).sum::<f32>()
             + (n as f32 - 1.0) * WORKSPACE_SPACING
     }
 }
@@ -62,7 +63,8 @@ impl Element for LeftPanel {
                 any = true;
             }
         }
-        let target = LEFT_PAD + self.dot_row_width() + RIGHT_PAD;
+        let dot_size = Size::new(0.0, 0.0);
+        let target = LEFT_PAD + self.dot_row_width(dot_size) + RIGHT_PAD;
         if target != self.panel_width.target() {
             self.panel_width.set_target(target, absolute_time);
         }
@@ -70,11 +72,16 @@ impl Element for LeftPanel {
         any || panel_animating
     }
 
-    fn draw(&self, surface: &dyn DrawingSurface, ctx: &RenderContext) {
+    fn layout(&self, _available: Size) -> Size {
+        Size { w: self.panel_width.value(), h: BAR_HEIGHT }
+    }
+
+    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext) {
         let corner_r = (ctx.surface_h - self.bottom_offset) / 2.0;
         let w = self.panel_width.value();
         let h = ctx.surface_h;
 
+        let bg_rect = Rect::new(rect.x, rect.y, w, h);
         let base_style = RectStyle::new()
             .corners(
                 CornerShape::Convex,
@@ -86,50 +93,42 @@ impl Element for LeftPanel {
             .inset_right(corner_r)
             .inset_bottom(self.bottom_offset);
 
-
         // Shadow pass
-        surface.draw_rect(
-            w, h,
+        batch.push(
+            bg_rect,
             &base_style
                 .clone()
                 .fill(0.0, 0.0, 0.0, 0.5)
                 .softness(20.0)
                 .shadow(0.0, 0.0),
-            Mat3::identity(),
         );
 
         // Fill pass
-        surface.draw_rect(
-            w, h,
+        batch.push(
+            bg_rect,
             &base_style
                 .clone()
                 .fill(0.085, 0.095, 0.110, 1.0),
-            Mat3::identity(),
         );
 
-        let mut cx = LEFT_PAD;
-        for dot in self.dots.iter() {
-            let tc = TranslatedCanvas::new(surface, cx, TOP);
-            dot.draw(&tc, ctx);
-            cx += dot.size().0 + WORKSPACE_SPACING;
+        // Dot row
+        let content_rect = Rect::new(rect.x + LEFT_PAD, rect.y + TOP, 0.0, 0.0);
+        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(Size::new(0.0, 0.0))).collect();
+        let dot_rects = stack_horizontal(content_rect, &dot_sizes, WORKSPACE_SPACING);
+        for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
+            dot.draw(dot_rect, batch, ctx);
         }
     }
 
-    fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let mut cx = LEFT_PAD;
-        for dot in self.dots.iter() {
-            let (dw, dh) = dot.size();
-            if x >= cx && x <= cx + dw && y >= TOP && y <= TOP + dh {
-                if dot.on_click(x - cx, y - TOP, ctx) {
-                    return true;
-                }
+    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(Size::new(0.0, 0.0))).collect();
+        let content_rect = Rect::new(rect.x + LEFT_PAD, rect.y + TOP, 0.0, 0.0);
+        let dot_rects = stack_horizontal(content_rect, &dot_sizes, WORKSPACE_SPACING);
+        for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
+            if dot_rect.contains(x, y) && dot.on_click(dot_rect, x, y, ctx) {
+                return true;
             }
-            cx += dw + WORKSPACE_SPACING;
         }
         false
-    }
-
-    fn size(&self) -> (f32, f32) {
-        (self.panel_width.value(), BAR_HEIGHT)
     }
 }
