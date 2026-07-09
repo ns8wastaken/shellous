@@ -119,6 +119,9 @@ impl ShellState {
                 root.draw(root_rect, &mut batch, &ctx);
             }
 
+            // Sort by shape so the GPU dispatch hits each program once
+            batch.sort_by_shape();
+
             // Pass 3: GPU render
             renderer.render_frame(&ctx, || {
                 renderer.render_batch(&batch, ctx.surface_w, ctx.surface_h);

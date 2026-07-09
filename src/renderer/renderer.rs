@@ -3,8 +3,7 @@ use std::sync::Arc;
 use wayland_egl::WlEglSurface;
 use wayland_client::Proxy;
 
-use crate::renderer::batch::{DrawBatch, Shape};
-use crate::renderer::programs::rect::Mat3;
+use crate::renderer::batch::DrawBatch;
 use crate::shell::egl::EglState;
 use crate::components::ui::RenderContext;
 
@@ -12,7 +11,7 @@ use crate::components::ui::RenderContext;
 
 /// Per-surface renderer.  Owns the EGL surface (tied to one Wayland surface)
 /// and a clone of the shared `EglState` so it can make its context current
-/// and access the shared `RectProgram`.
+/// and access the shared program registry.
 pub struct Renderer {
     egl: Arc<EglState>,
     egl_surface: khronos_egl::Surface,
@@ -103,29 +102,19 @@ impl Renderer {
             .expect("eglSwapBuffers failed");
     }
 
-    pub fn rect_program(&self) -> &crate::renderer::programs::rect::RectProgram {
-        &self.egl.rect_program
-    }
-
     /// Submit a batch of draw commands to the GPU.
-    /// All commands are submitted in order as individual draw calls.
-    /// Future: switch to instanced rendering for a single draw call.
+    ///
+    /// Commands are grouped by shape (sorted in pass 2) and dispatched
+    /// to the matching program from the shared registry.  Each program
+    /// controls its own draw strategy — the default iterates individual
+    /// commands, but programs may override with instanced rendering.
+    ///
+    /// Adding a new shape = register a `ShapeProgram` in `EglState`.
+    /// No pipeline code changes needed.
     pub fn render_batch(&self, batch: &DrawBatch, surface_w: f32, surface_h: f32) {
-        let rect_prog = self.rect_program();
-        for cmd in batch.commands() {
-            match cmd.shape {
-                Shape::Rect => rect_prog.draw(
-                    surface_w,
-                    surface_h,
-                    cmd.rect.w,
-                    cmd.rect.h,
-                    &cmd.style,
-                    Mat3::translation(cmd.rect.x, cmd.rect.y),
-                ),
-                Shape::Circle => {
-                    // Placeholder for CircleProgram — shaders exist at
-                    // src/renderer/shaders/circle.vert / circle.frag
-                }
+        for (shape, cmds) in batch.shape_groups() {
+            if let Some(program) = self.egl.programs.get(&shape) {
+                program.draw_batch(cmds, surface_w, surface_h);
             }
         }
     }

@@ -37,8 +37,8 @@ impl Element for MiddlePanel {
             rect,
             &base_style
                 .clone()
-                .fill(0.0, 0.0, 0.0, 0.5)
-                .softness(20.0)
+                .fill(0.0, 0.0, 0.0, 0.3)
+                .softness(10.0)
                 .shadow(0.0, 0.0),
         );
 

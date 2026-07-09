@@ -2,12 +2,17 @@ use gl::types::GLuint;
 use khronos_egl as egl;
 use libloading::Library;
 
+use crate::renderer::batch::Shape;
+use crate::renderer::programs::circle::CircleProgram;
+use crate::renderer::programs::program::ProgramRegistry;
+use crate::renderer::programs::rect::RectProgram;
+
 pub struct EglState {
     pub egl: egl::DynamicInstance<egl::EGL1_4>,
     pub egl_display: egl::Display,
     pub egl_config: egl::Config,
     pub egl_context: egl::Context,
-    pub rect_program: crate::renderer::programs::rect::RectProgram,
+    pub programs: ProgramRegistry,
     pub vao: GLuint,
 }
 
@@ -63,7 +68,9 @@ impl EglState {
                 .unwrap_or(std::ptr::null()) as *const std::ffi::c_void
         });
 
-        let rect_program = crate::renderer::programs::rect::RectProgram::new();
+        let mut programs = ProgramRegistry::new();
+        programs.register(Shape::Rect, RectProgram::new());
+        programs.register(Shape::Circle, CircleProgram::new());
         let mut vao: GLuint = 0;
         unsafe {
             gl::GenVertexArrays(1, &mut vao);
@@ -80,7 +87,7 @@ impl EglState {
             egl_display: display,
             egl_config: config,
             egl_context: context,
-            rect_program,
+            programs,
             vao,
         })
     }

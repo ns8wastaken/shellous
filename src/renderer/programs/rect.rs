@@ -234,10 +234,13 @@ const QUAD_VERTS: [f32; 12] = [
     0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
 ];
 
+use crate::renderer::batch::DrawCommand;
+use crate::renderer::programs::program::ShapeProgram;
+
 pub struct RectProgram {
     program: GLuint,
+    vao: GLuint,
     vbo: GLuint,
-    pos_loc: GLint,
     surface_size_loc: GLint,
     quad_size_loc: GLint,
     rect_origin_loc: GLint,
@@ -305,10 +308,17 @@ impl RectProgram {
                 gl::STATIC_DRAW,
             );
 
+            let mut vao: GLuint = 0;
+            gl::GenVertexArrays(1, &mut vao);
+            gl::BindVertexArray(vao);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::VertexAttribPointer(pos_loc as GLuint, 2, gl::FLOAT, gl::FALSE, 0, ptr::null());
+            gl::EnableVertexAttribArray(pos_loc as GLuint);
+
             Self {
                 program,
+                vao,
                 vbo,
-                pos_loc,
                 surface_size_loc: get_loc(b"u_surface_size\0"),
                 quad_size_loc: get_loc(b"u_quad_size\0"),
                 rect_origin_loc: get_loc(b"u_rect_origin\0"),
@@ -445,12 +455,8 @@ impl RectProgram {
 
             gl::UniformMatrix3fv(self.transform_loc, 1, gl::FALSE, quad_transform.m.as_ptr());
 
-            let pos_attr = self.pos_loc as GLuint;
-            gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
-            gl::VertexAttribPointer(pos_attr, 2, gl::FLOAT, gl::FALSE, 0, ptr::null());
-            gl::EnableVertexAttribArray(pos_attr);
+            gl::BindVertexArray(self.vao);
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
-            gl::DisableVertexAttribArray(pos_attr);
         }
     }
 
@@ -501,9 +507,29 @@ impl Drop for RectProgram {
             if self.program != 0 {
                 gl::DeleteProgram(self.program);
             }
+            if self.vao != 0 {
+                gl::DeleteVertexArrays(1, &self.vao);
+            }
             if self.vbo != 0 {
                 gl::DeleteBuffers(1, &self.vbo);
             }
+        }
+    }
+}
+
+// ==================== SHAPE PROGRAM IMPL ====================
+
+impl ShapeProgram for RectProgram {
+    fn draw_batch(&self, commands: &[DrawCommand], surface_w: f32, surface_h: f32) {
+        for cmd in commands {
+            self.draw(
+                surface_w,
+                surface_h,
+                cmd.rect.w,
+                cmd.rect.h,
+                &cmd.style,
+                Mat3::translation(cmd.rect.x, cmd.rect.y),
+            );
         }
     }
 }

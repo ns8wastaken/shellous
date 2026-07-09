@@ -99,8 +99,8 @@ impl Element for LeftPanel {
             bg_rect,
             &base_style
                 .clone()
-                .fill(0.0, 0.0, 0.0, 0.5)
-                .softness(20.0)
+                .fill(0.0, 0.0, 0.0, 0.3)
+                .softness(10.0)
                 .shadow(0.0, 0.0),
         );
 
@@ -114,7 +114,10 @@ impl Element for LeftPanel {
 
         // Dot row
         let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
-        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(rect.size())).collect();
+        let dot_sizes: Vec<Size> = self.dots
+            .iter()
+            .map(|d| d.layout(rect.size()))
+            .collect();
         let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
         for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
             dot.draw(dot_rect, batch, ctx);
@@ -122,7 +125,10 @@ impl Element for LeftPanel {
     }
 
     fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let dot_sizes: Vec<Size> = self.dots.iter().map(|d| d.layout(rect.size())).collect();
+        let dot_sizes: Vec<Size> = self.dots
+            .iter()
+            .map(|d| d.layout(rect.size()))
+            .collect();
         let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
         let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
         for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
