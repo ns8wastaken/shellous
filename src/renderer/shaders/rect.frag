@@ -1,37 +1,28 @@
 #version 300 es
 precision highp float;
 
-uniform vec2 u_rect_size;
-uniform vec4 u_color;
-uniform vec4 u_border_color;
-uniform int u_fill_mode;
-uniform vec2 u_gradient_direction;
-uniform vec4 u_gradient_stops;
-uniform vec4 u_gradient_color0;
-uniform vec4 u_gradient_color1;
-uniform vec4 u_gradient_color2;
-uniform vec4 u_gradient_color3;
-uniform vec4 u_corner_shapes; // tl, tr, br, bl: 0 = convex, 1 = concave
-uniform vec4 u_logical_inset; // left, top, right, bottom
-uniform vec4 u_radii;  // tl, tr, br, bl
-uniform float u_softness;
-uniform int u_no_aa;
-uniform int u_invert_fill;
-uniform float u_border_width;
-uniform int u_outer_shadow;
-uniform vec2 u_shadow_cutout_offset;
-uniform int u_shadow_exclusion;
-uniform vec2 u_shadow_exclusion_offset;
-uniform vec2 u_shadow_exclusion_size;
-uniform vec4 u_shadow_exclusion_corner_shapes;
-uniform vec4 u_shadow_exclusion_logical_inset;
-uniform vec4 u_shadow_exclusion_radii;
 in vec2 v_pixel;
-
+in vec2 v_rect_size;
+in vec4 v_color;
+in vec4 v_border_color;
+in float v_fill_mode;
+in vec2 v_gradient_direction;
+in vec4 v_gradient_stops;
+in vec4 v_gradient_color0;
+in vec4 v_gradient_color1;
+in vec4 v_gradient_color2;
+in vec4 v_gradient_color3;
+in vec4 v_corner_shapes;
+in vec4 v_logical_inset;
+in vec4 v_radii;
+in float v_softness;
+in float v_no_aa;
+in float v_invert_fill;
+in float v_border_width;
+in float v_outer_shadow;
+in vec2 v_shadow_cutout_offset;
 out vec4 fragColor;
 
-// Returns (signed distance, is_corner). is_corner = 1.0 when the fragment lies in
-// the curved-corner quadrant of the active radius (both q components positive).
 vec2 rounded_rect_distance_with_corner(vec2 point, vec2 size, vec4 radii) {
     vec2 half_size = size * 0.5;
     vec2 centered = point - half_size;
@@ -52,16 +43,11 @@ float circle_extent(float radius, float delta) {
     return sqrt(max(0.0, radius * radius - delta * delta));
 }
 
-// Returns (signed distance, is_corner). is_corner = 1.0 when the fragment is
-// inside any active corner's r×r axis-aligned band (curved region — concave or
-// convex). Fragments in straight-edge bands return 0.0.
 vec2 shape_distance_with_corner(vec2 point, vec2 size, vec4 radii, vec4 corner_shapes, vec4 logical_inset) {
     vec4 safe_inset = max(logical_inset, vec4(0.0));
     vec2 body_min = min(safe_inset.xy, size);
     vec2 body_max = max(body_min, size - safe_inset.zw);
     vec2 body_size = max(body_max - body_min, vec2(0.0));
-    // float max_radius = max(min(body_size.x, body_size.y) * 0.5, 0.0);
-    // vec4 r = clamp(radii, vec4(0.0), vec4(max_radius));
     vec4 r = max(radii, vec4(0.0));
 
     bool tl_concave = corner_shapes.x > 0.5;
@@ -177,9 +163,6 @@ vec2 shape_distance_with_corner(vec2 point, vec2 size, vec4 radii, vec4 corner_s
 
     float boundary_distance = max(max(left - x, x - right), max(top - y, y - bottom));
     float visual_clip = max(max(-point.x, point.x - size.x), max(-point.y, point.y - size.y));
-    // Curve AA only when the curved boundary actually dominates. Where visual_clip wins
-    // (e.g. concave wing along the visual-rect top edge) the boundary is axis-aligned —
-    // snap with the straight-edge window instead.
     float is_corner = (in_corner_box && boundary_distance > visual_clip) ? 1.0 : 0.0;
     return vec2(max(boundary_distance, visual_clip), is_corner);
 }
@@ -195,8 +178,6 @@ float shadow_shape_distance(vec2 point, vec2 size, vec4 radii, vec4 corner_shape
     vec2 body_min = min(safe_inset.xy, size);
     vec2 body_max = max(body_min, size - safe_inset.zw);
     vec2 body_size = max(body_max - body_min, vec2(0.0));
-    // float max_radius = max(min(body_size.x, body_size.y) * 0.5, 0.0);
-    // vec4 r = clamp(radii, vec4(0.0), vec4(max_radius));
     vec4 r = max(radii, vec4(0.0));
 
     bool tl_concave = corner_shapes.x > 0.5;
@@ -243,11 +224,8 @@ float shadow_shape_distance(vec2 point, vec2 size, vec4 radii, vec4 corner_shape
     return max(distance, visual_clip);
 }
 
-// Pixel-grid-snap window for axis-aligned edges: half-coverage falls exactly on
-// the boundary so an integer-aligned edge produces 100% on the inside pixel and
-// 0% on the outside pixel, with no semi-transparent leakage.
 float coverage_for(vec2 distance_with_corner, float aa_curve) {
-    if (u_no_aa == 1) {
+    if (v_no_aa > 0.5) {
         return 1.0 - step(0.0, distance_with_corner.x);
     }
     float lo = mix(-0.5, -aa_curve, distance_with_corner.y);
@@ -260,15 +238,15 @@ float gradient_segment_t(float position, float start, float end) {
 }
 
 vec4 gradient_fill(float position) {
-    vec4 stops = clamp(u_gradient_stops, vec4(0.0), vec4(1.0));
+    vec4 stops = clamp(v_gradient_stops, vec4(0.0), vec4(1.0));
     stops.y = max(stops.y, stops.x);
     stops.z = max(stops.z, stops.y);
     stops.w = max(stops.w, stops.z);
 
-    vec4 c0 = u_gradient_color0;
-    vec4 c1 = u_gradient_color1;
-    vec4 c2 = u_gradient_color2;
-    vec4 c3 = u_gradient_color3;
+    vec4 c0 = v_gradient_color0;
+    vec4 c1 = v_gradient_color1;
+    vec4 c2 = v_gradient_color2;
+    vec4 c3 = v_gradient_color3;
 
     if (position <= stops.y) {
         return mix(c0, c1, gradient_segment_t(position, stops.x, stops.y));
@@ -280,46 +258,41 @@ vec4 gradient_fill(float position) {
 }
 
 void main() {
-    float aa = max(u_softness, 0.85);
+    float aa = max(v_softness, 0.85);
     vec2 local_point = v_pixel;
-    vec2 uv = clamp(local_point / u_rect_size, vec2(0.0), vec2(1.0));
+    vec2 uv = clamp(local_point / v_rect_size, vec2(0.0), vec2(1.0));
 
-    vec2 outer = shape_distance_with_corner(local_point, u_rect_size, u_radii, u_corner_shapes, u_logical_inset);
+    vec2 outer = shape_distance_with_corner(local_point, v_rect_size, v_radii, v_corner_shapes, v_logical_inset);
     float outer_distance = outer.x;
     float outer_coverage = coverage_for(outer, aa);
-    if (u_invert_fill == 1) outer_coverage = 1.0 - outer_coverage;
+    if (v_invert_fill > 0.5) outer_coverage = 1.0 - outer_coverage;
 
-    if (u_outer_shadow == 1) {
+    if (v_outer_shadow > 0.5) {
         float cutout_aa = 0.85;
-        float shadow_distance = shadow_shape_distance(local_point, u_rect_size, u_radii, u_corner_shapes, u_logical_inset);
+        float shadow_distance = shadow_shape_distance(local_point, v_rect_size, v_radii, v_corner_shapes, v_logical_inset);
         float shadow_outer_coverage = 1.0 - smoothstep(-aa, aa, shadow_distance);
-        float cutout_distance = shape_distance(local_point + u_shadow_cutout_offset, u_rect_size, u_radii, u_corner_shapes, u_logical_inset);
+        float cutout_distance = shape_distance(local_point + v_shadow_cutout_offset, v_rect_size, v_radii, v_corner_shapes, v_logical_inset);
         float cutout_mask = 1.0 - smoothstep(-cutout_aa, cutout_aa, cutout_distance);
         float shadow_coverage = shadow_outer_coverage * (1.0 - cutout_mask);
-        if (u_shadow_exclusion == 1 && u_shadow_exclusion_size.x > 0.0 && u_shadow_exclusion_size.y > 0.0) {
-            float exclusion_distance = shape_distance(local_point + u_shadow_exclusion_offset, u_shadow_exclusion_size, u_shadow_exclusion_radii, u_shadow_exclusion_corner_shapes, u_shadow_exclusion_logical_inset);
-            float exclusion_mask = 1.0 - smoothstep(-cutout_aa, cutout_aa, exclusion_distance);
-            shadow_coverage *= 1.0 - exclusion_mask;
-        }
-        float out_alpha = u_color.a * shadow_coverage;
+        float out_alpha = v_color.a * shadow_coverage;
         if (out_alpha <= 0.0) {
             discard;
         }
-        fragColor = vec4(u_color.rgb * out_alpha, out_alpha);
+        fragColor = vec4(v_color.rgb * out_alpha, out_alpha);
         return;
     }
 
-    float gradient_pos = clamp(dot(uv, u_gradient_direction), 0.0, 1.0);
+    float gradient_pos = clamp(dot(uv, v_gradient_direction), 0.0, 1.0);
     vec4 fill_base;
-    if (u_fill_mode == 0) {
+    if (v_fill_mode < 0.5) {
         fill_base = vec4(0.0);
-    } else if (u_fill_mode == 1) {
-        fill_base = u_color;
+    } else if (v_fill_mode < 1.5) {
+        fill_base = v_color;
     } else {
         fill_base = gradient_fill(gradient_pos);
     }
 
-    if (u_border_width <= 0.0 || u_border_color.a <= 0.0) {
+    if (v_border_width <= 0.0 || v_border_color.a <= 0.0) {
         float out_alpha = fill_base.a * outer_coverage;
         if (out_alpha <= 0.0) {
             discard;
@@ -328,45 +301,39 @@ void main() {
         return;
     }
 
-    bool any_concave = u_corner_shapes.x > 0.5 || u_corner_shapes.y > 0.5 || u_corner_shapes.z > 0.5 || u_corner_shapes.w > 0.5;
+    bool any_concave = v_corner_shapes.x > 0.5 || v_corner_shapes.y > 0.5 || v_corner_shapes.z > 0.5 || v_corner_shapes.w > 0.5;
     vec2 inner;
     if (any_concave) {
-        inner = vec2(outer_distance + u_border_width, outer.y);
+        inner = vec2(outer_distance + v_border_width, outer.y);
     } else {
-        vec4 inner_radii = max(u_radii - vec4(u_border_width), vec4(0.0));
-        vec2 inner_size = max(u_rect_size - vec2(u_border_width * 2.0), vec2(0.0));
-        vec2 inner_point = local_point - vec2(u_border_width);
-        vec4 inner_inset = max(u_logical_inset - vec4(u_border_width), vec4(0.0));
-        inner = shape_distance_with_corner(inner_point, inner_size, inner_radii, u_corner_shapes, inner_inset);
+        vec4 inner_radii = max(v_radii - vec4(v_border_width), vec4(0.0));
+        vec2 inner_size = max(v_rect_size - vec2(v_border_width * 2.0), vec2(0.0));
+        vec2 inner_point = local_point - vec2(v_border_width);
+        vec4 inner_inset = max(v_logical_inset - vec4(v_border_width), vec4(0.0));
+        inner = shape_distance_with_corner(inner_point, inner_size, inner_radii, v_corner_shapes, inner_inset);
     }
     float inner_coverage = coverage_for(inner, aa);
 
     if (fill_base.a <= 0.0) {
         float ring_coverage = outer_coverage * (1.0 - inner_coverage);
-        float out_alpha = u_border_color.a * ring_coverage;
+        float out_alpha = v_border_color.a * ring_coverage;
         if (out_alpha <= 0.0) {
             discard;
         }
-        fragColor = vec4(u_border_color.rgb * out_alpha, out_alpha);
+        fragColor = vec4(v_border_color.rgb * out_alpha, out_alpha);
         return;
     }
 
-    // Fill and border occupy disjoint regions: the fill lives where
-    // inner_coverage == 1, the border ring lives where inner_coverage == 0.
-    // Mix between them so a translucent fill never sits on top of a
-    // full-area border backplane (which would mask its opacity).
-    vec3 border_pm = u_border_color.rgb * u_border_color.a;
+    vec3 border_pm = v_border_color.rgb * v_border_color.a;
     vec3 fill_pm = fill_base.rgb * fill_base.a;
 
     vec3 interior_rgb = mix(border_pm, fill_pm, inner_coverage);
-    float interior_a = mix(u_border_color.a, fill_base.a, inner_coverage);
+    float interior_a = mix(v_border_color.a, fill_base.a, inner_coverage);
 
-    // Apply outer shape mask
     float out_alpha = interior_a * outer_coverage;
     if (out_alpha <= 0.0) {
         discard;
     }
 
-    // Output premultiplied alpha
     fragColor = vec4(interior_rgb * outer_coverage, out_alpha);
 }
