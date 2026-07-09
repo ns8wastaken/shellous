@@ -1,4 +1,5 @@
 use crate::components::layout::stack_horizontal;
+use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::components::keyed_list::KeyedList;
 use crate::components::ui::{Element, RenderContext};
@@ -77,12 +78,29 @@ impl Element for LeftPanel {
         Size { w: self.panel_width.value(), h: BAR_HEIGHT }
     }
 
-    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext) {
+    fn layout_tree(&self, rect: Rect) -> LayoutNode {
+        let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
+        let dot_sizes: Vec<Size> = self.dots
+            .iter()
+            .map(|d| d.layout(rect.size()))
+            .collect();
+        let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
+        LayoutNode {
+            rect,
+            children: self.dots
+                .iter()
+                .zip(dot_rects)
+                .map(|(d, r)| d.layout_tree(r))
+                .collect(),
+        }
+    }
+
+    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, ctx: &RenderContext) {
         let corner_r = (ctx.surface_h - self.bottom_offset) / 2.0;
         let w = self.panel_width.value();
         let h = ctx.surface_h;
 
-        let bg_rect = Rect { w, h, ..rect };
+        let bg_rect = Rect { w, h, ..node.rect };
         let base_style = RectStyle::new()
             .corners(
                 CornerShape::Convex,
@@ -97,7 +115,7 @@ impl Element for LeftPanel {
         // Shadow pass
         batch.push(
             bg_rect,
-            &base_style
+            base_style
                 .clone()
                 .fill(0.0, 0.0, 0.0, 0.3)
                 .softness(10.0)
@@ -107,32 +125,20 @@ impl Element for LeftPanel {
         // Fill pass
         batch.push(
             bg_rect,
-            &base_style
-                .clone()
-                .fill(0.085, 0.095, 0.110, 1.0),
+            base_style.fill(0.085, 0.095, 0.110, 1.0),
         );
 
         // Dot row
-        let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
-        let dot_sizes: Vec<Size> = self.dots
-            .iter()
-            .map(|d| d.layout(rect.size()))
-            .collect();
-        let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
-        for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
-            dot.draw(dot_rect, batch, ctx);
+        for (dot, child_node) in self.dots.iter().zip(&node.children) {
+            dot.draw(child_node, batch, ctx);
         }
     }
 
-    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let dot_sizes: Vec<Size> = self.dots
-            .iter()
-            .map(|d| d.layout(rect.size()))
-            .collect();
-        let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
-        let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
-        for (dot, dot_rect) in self.dots.iter().zip(dot_rects) {
-            if dot_rect.contains(x, y) && dot.on_click(dot_rect, x, y, ctx) {
+    fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        for i in (0..self.dots.items.len()).rev() {
+            let (_, dot) = &self.dots.items[i];
+            let child_node = &node.children[i];
+            if child_node.rect.contains(x, y) && dot.on_click(child_node, x, y, ctx) {
                 return true;
             }
         }

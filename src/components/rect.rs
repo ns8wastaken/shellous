@@ -75,28 +75,10 @@ impl Rect {
         }
     }
 
-    pub fn place_top_left(self, child: Size) -> Self {
-        Self {
-            x: self.x,
-            y: self.y,
-            w: child.w,
-            h: child.h,
-        }
-    }
-
     pub fn place_top_center(self, child: Size) -> Self {
         Self {
             x: self.x + (self.w - child.w) * 0.5,
             y: self.y,
-            w: child.w,
-            h: child.h,
-        }
-    }
-
-    pub fn place_bottom_left(self, child: Size) -> Self {
-        Self {
-            x: self.x,
-            y: self.y + self.h - child.h,
             w: child.w,
             h: child.h,
         }

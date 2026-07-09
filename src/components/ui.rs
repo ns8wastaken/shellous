@@ -1,3 +1,4 @@
+use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
@@ -24,16 +25,18 @@ pub trait Element {
     /// Called during the layout phase (CPU only).
     fn layout(&self, available: Size) -> Size;
 
-    /// Collect draw commands into `batch` for the absolute `rect` region.
-    /// Called during the geometry batching phase (CPU memory).
-    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext);
-
-    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let _ = (rect, x, y, ctx);
-        false
+    /// Build the retained layout tree for a given parent rect.
+    /// Default: leaf node (no children).
+    fn layout_tree(&self, rect: Rect) -> LayoutNode {
+        LayoutNode::new(rect)
     }
 
-    fn id(&self) -> Option<i32> {
-        None
+    /// Collect draw commands using the cached layout node.
+    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, ctx: &RenderContext);
+
+    /// Walk the cached layout tree for hit-testing.
+    /// Containers override to iterate their children; leaves override to handle clicks.
+    fn on_click(&self, _node: &LayoutNode, _x: f32, _y: f32, _ctx: &RenderContext) -> bool {
+        false
     }
 }

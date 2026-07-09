@@ -30,17 +30,17 @@ impl DrawBatch {
         Self { commands: Vec::with_capacity(64) }
     }
 
-    pub fn push(&mut self, rect: Rect, style: &RectStyle) {
+    pub fn push(&mut self, rect: Rect, style: RectStyle) {
         self.push_shape(rect, style, Shape::Rect);
     }
 
-    pub fn push_shape(&mut self, rect: Rect, style: &RectStyle, shape: Shape) {
+    pub fn push_shape(&mut self, rect: Rect, style: RectStyle, shape: Shape) {
         if rect.w <= 0.0 || rect.h <= 0.0 {
             return;
         }
         self.commands.push(DrawCommand {
             rect,
-            style: style.clone(),
+            style,
             shape,
         });
     }

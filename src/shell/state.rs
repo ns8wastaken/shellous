@@ -2,7 +2,6 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use crate::components::rect::Rect;
-use crate::components::ui::RenderContext;
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
 use crate::shell::compositor::Compositor;
@@ -95,10 +94,25 @@ impl ShellState {
         still_moving
     }
 
-    /// Render phase — three-pass pipeline:
-    ///   1. Layout (CPU only)
-    ///   2. Geometry batching (CPU memory)
-    ///   3. GPU render
+    /// Build cached layout tree for all dirty surfaces.
+    /// Called after tick_animations, before render.
+    pub fn compute_layouts(&mut self) {
+        for entry in &mut self.surfaces {
+            if !entry.dirty.get() {
+                continue;
+            }
+            let root_size = entry.root_size();
+            if let Some(root) = entry.root.as_ref() {
+                let desired = root.layout(root_size);
+                let root_rect = Rect::from_size(desired);
+                entry.layout = Some(root.layout_tree(root_rect));
+            }
+        }
+    }
+
+    /// Render phase — two-pass pipeline (layout is already cached):
+    ///   1. Geometry batching (CPU memory)
+    ///   2. GPU render
     pub fn render(&self) {
         for entry in &self.surfaces {
             if !entry.dirty.get() || entry.renderer.is_none() {
@@ -108,21 +122,16 @@ impl ShellState {
             renderer.make_current();
             let ctx = entry.render_context(self);
 
-            // Pass 1: Layout (CPU only)
-            let surface_size = entry.root_size();
-            let root_size = entry.root.as_ref().map_or(surface_size, |r| r.layout(surface_size));
-
-            // Pass 2: Geometry batching (CPU memory)
+            // Pass 1: Geometry batching (CPU memory) from cached layout
             let mut batch = DrawBatch::new();
-            let root_rect = Rect::from_size(root_size);
-            if let Some(ref root) = entry.root {
-                root.draw(root_rect, &mut batch, &ctx);
+            if let (Some(root), Some(layout)) = (&entry.root, &entry.layout) {
+                root.draw(layout, &mut batch, &ctx);
             }
 
             // Sort by shape so the GPU dispatch hits each program once
             batch.sort_by_shape();
 
-            // Pass 3: GPU render
+            // Pass 2: GPU render
             renderer.render_frame(&ctx, || {
                 renderer.render_batch(&batch, ctx.surface_w, ctx.surface_h);
             });
@@ -143,11 +152,7 @@ impl ShellState {
             Some(s) => s,
             None => return,
         };
-        let ctx = RenderContext {
-            state: self,
-            surface_w: surface.kind.dimensions().0 as f32,
-            surface_h: surface.kind.dimensions().1 as f32,
-        };
+        let ctx = surface.render_context(self);
         surface.on_click(x, y, &ctx);
     }
 
@@ -160,6 +165,5 @@ impl ShellState {
             .iter()
             .find(|s| s.kind.wl_surface() == wl_surface)
             .map(|s| s.id);
-        eprintln!("[shell] focus -> surface {:?}", self.focused_surface);
     }
 }

@@ -2,7 +2,8 @@ use std::cell::Cell;
 
 use wayland_client::QueueHandle;
 
-use crate::components::rect::{Rect, Size};
+use crate::components::layout_tree::LayoutNode;
+use crate::components::rect::Size;
 use crate::components::ui::{Element, RenderContext};
 use crate::shell::state::ShellState;
 use crate::shell::surface::{Surface, SurfaceKind};
@@ -15,6 +16,7 @@ pub struct ManagedSurface {
     pub renderer: Option<crate::renderer::Renderer>,
     pub frame_pending: Cell<bool>,
     pub dirty: Cell<bool>,
+    pub layout: Option<LayoutNode>,
 }
 
 impl ManagedSurface {
@@ -46,10 +48,8 @@ impl ManagedSurface {
     }
 
     pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) {
-        if let Some(ref root) = self.root {
-            let root_size = self.root_size();
-            let root_rect = Rect::from_size(root_size);
-            root.on_click(root_rect, x, y, ctx);
+        if let (Some(root), Some(layout)) = (&self.root, &self.layout) {
+            root.on_click(layout, x, y, ctx);
         }
     }
 }

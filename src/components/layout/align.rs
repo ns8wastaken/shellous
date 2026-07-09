@@ -1,4 +1,5 @@
 use crate::components::layout::Alignment;
+use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
@@ -30,19 +31,20 @@ impl Element for Align {
         self.child.layout(available)
     }
 
-    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext) {
+    fn layout_tree(&self, rect: Rect) -> LayoutNode {
         let child_size = self.child.layout(rect.size());
         let child_rect = self.alignment.apply(rect, child_size);
-        self.child.draw(child_rect, batch, ctx);
+        LayoutNode {
+            rect,
+            children: vec![self.child.layout_tree(child_rect)],
+        }
     }
 
-    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        let child_size = self.child.layout(rect.size());
-        let child_rect = self.alignment.apply(rect, child_size);
-        self.child.on_click(child_rect, x, y, ctx)
+    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, ctx: &RenderContext) {
+        self.child.draw(&node.children[0], batch, ctx);
     }
 
-    fn id(&self) -> Option<i32> {
-        self.child.id()
+    fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        self.child.on_click(&node.children[0], x, y, ctx)
     }
 }

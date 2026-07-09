@@ -24,28 +24,4 @@ impl Alignment {
     }
 }
 
-// ==================== ALIGNMENT HELPERS ====================
 
-pub fn align_center(parent: Rect, child: Size) -> Rect {
-    parent.place_center(child)
-}
-
-pub fn align_left_center(parent: Rect, child: Size) -> Rect {
-    parent.place_left_center(child)
-}
-
-pub fn align_right_center(parent: Rect, child: Size) -> Rect {
-    parent.place_right_center(child)
-}
-
-pub fn align_top_left(parent: Rect, child: Size) -> Rect {
-    parent.place_top_left(child)
-}
-
-pub fn align_top_center(parent: Rect, child: Size) -> Rect {
-    parent.place_top_center(child)
-}
-
-pub fn align_bottom_left(parent: Rect, child: Size) -> Rect {
-    parent.place_bottom_left(child)
-}

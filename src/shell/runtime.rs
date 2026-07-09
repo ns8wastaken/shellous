@@ -116,6 +116,7 @@ impl Shell {
             renderer: None,
             frame_pending: Cell::new(false),
             dirty: Cell::new(true),
+            layout: None,
         });
 
         let surface_state_arc = {
@@ -222,7 +223,7 @@ impl Shell {
             // 7. Compute absolute time
             let absolute_time = shell_start.elapsed().as_secs_f32();
 
-            // 8. Tick & Render phase
+            // 8. Tick, Layout, & Render phase
             if self.state.any_dirty() {
                 let still_moving = self.state.tick_animations(absolute_time);
 
@@ -236,6 +237,7 @@ impl Shell {
                     }
                 }
 
+                self.state.compute_layouts();
                 self.state.render();
 
                 for entry in &mut self.state.surfaces {

@@ -1,4 +1,5 @@
-use crate::components::rect::{Rect, Size};
+use crate::components::layout_tree::LayoutNode;
+use crate::components::rect::Size;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
@@ -48,23 +49,19 @@ impl Element for WorkspaceDot {
         Size { w: self.width.value(), h: WORKSPACE_R * 2.0 }
     }
 
-    fn draw(&self, rect: Rect, batch: &mut DrawBatch, _ctx: &RenderContext) {
+    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, _ctx: &RenderContext) {
         let fill = if self.is_active {
             Color { r: 1.0, g: 0.12, b: 0.14, a: 1.0 }
         } else {
             Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
         };
-        batch.push(rect, &RectStyle::solid(fill, WORKSPACE_R));
+        batch.push(node.rect, RectStyle::solid(fill, WORKSPACE_R));
     }
 
-    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        rect.contains(x, y) && {
+    fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        node.rect.contains(x, y) && {
             ctx.state.compositor.activate_workspace(self.workspace_id);
             true
         }
-    }
-
-    fn id(&self) -> Option<i32> {
-        Some(self.workspace_id)
     }
 }

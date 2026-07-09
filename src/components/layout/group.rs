@@ -1,3 +1,4 @@
+use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
 use crate::services::workspace::WorkspaceSnapshot;
@@ -39,15 +40,22 @@ impl Element for Group {
         available
     }
 
-    fn draw(&self, rect: Rect, batch: &mut DrawBatch, ctx: &RenderContext) {
-        for child in &self.children {
-            child.draw(rect, batch, ctx);
+    fn layout_tree(&self, rect: Rect) -> LayoutNode {
+        LayoutNode {
+            rect,
+            children: self.children.iter().map(|c| c.layout_tree(rect)).collect(),
         }
     }
 
-    fn on_click(&self, rect: Rect, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        for child in self.children.iter().rev() {
-            if child.on_click(rect, x, y, ctx) {
+    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, ctx: &RenderContext) {
+        for (child, child_node) in self.children.iter().zip(&node.children) {
+            child.draw(child_node, batch, ctx);
+        }
+    }
+
+    fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {
+        for (child, child_node) in self.children.iter().zip(&node.children).rev() {
+            if child_node.rect.contains(x, y) && child.on_click(child_node, x, y, ctx) {
                 return true;
             }
         }

@@ -1,4 +1,5 @@
-use crate::components::rect::{Rect, Size};
+use crate::components::layout_tree::LayoutNode;
+use crate::components::rect::Size;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::batch::DrawBatch;
 use crate::renderer::programs::rect::{
@@ -21,7 +22,7 @@ impl Element for MiddlePanel {
         Size { w: self.width, h: BAR_HEIGHT }
     }
 
-    fn draw(&self, rect: Rect, batch: &mut DrawBatch, _ctx: &RenderContext) {
+    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, _ctx: &RenderContext) {
         let base_style = RectStyle::new()
             .corners(
                 CornerShape::Concave,
@@ -34,8 +35,8 @@ impl Element for MiddlePanel {
             .inset_right(CORNER_RADIUS);
 
         batch.push(
-            rect,
-            &base_style
+            node.rect,
+            base_style
                 .clone()
                 .fill(0.0, 0.0, 0.0, 0.3)
                 .softness(10.0)
@@ -43,8 +44,8 @@ impl Element for MiddlePanel {
         );
 
         batch.push(
-            rect,
-            &base_style.fill(0.085, 0.095, 0.110, 1.0),
+            node.rect,
+            base_style.fill(0.085, 0.095, 0.110, 1.0),
         );
     }
 }
