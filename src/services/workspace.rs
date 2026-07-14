@@ -42,11 +42,6 @@ impl WorkspaceHandle {
             active_id: s.active_id,
         }
     }
-
-    pub fn read<R>(&self, f: impl FnOnce(&WorkspaceState) -> R) -> R {
-        let s = self.state.lock().unwrap();
-        f(&s)
-    }
 }
 
 // ==================== WORKSPACE SERVICE ====================
@@ -117,5 +112,13 @@ impl ShellModule for WorkspaceService {
                 let _ = tx.send(ShellEvent::WorkspaceUpdated(snapshot));
             }
         }));
+    }
+
+    fn initial_event(&self) -> Option<ShellEvent> {
+        let s = self.state.lock().unwrap();
+        Some(ShellEvent::WorkspaceUpdated(WorkspaceSnapshot {
+            workspaces: s.workspaces.clone(),
+            active_id: s.active_id,
+        }))
     }
 }

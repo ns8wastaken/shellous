@@ -23,7 +23,7 @@ fn main() {
     let workspace_service = WorkspaceService::new(compositor);
     // let tray_service = TrayService::new(); // <-- Add future modules here
 
-    bar::mount(&mut shell, workspace_service.handle());
+    bar::mount(&mut shell);
 
     let modules: Vec<Box<dyn ShellModule>> = vec![
         Box::new(workspace_service),

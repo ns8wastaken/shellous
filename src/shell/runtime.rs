@@ -269,8 +269,12 @@ impl Shell {
             event_tx: self.event_tx,
         };
 
-        // Note: Individual components now read initial layout seed values via their
-        // injected handles upon creation rather than the runtime manually pushing it.
+        for module in &modules {
+            if let Some(evt) = module.initial_event() {
+                data.handle_event(evt); // same update_surfaces() path as any later event
+            }
+        }
+
         data.render_frame();
 
         event_loop

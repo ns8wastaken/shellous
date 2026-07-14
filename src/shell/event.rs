@@ -1,3 +1,6 @@
+use calloop::{LoopHandle, channel::Sender};
+
+use super::runtime::LoopData;
 use crate::services::workspace::WorkspaceSnapshot;
 
 // ==================== SHELL EVENT ====================
@@ -17,9 +20,10 @@ pub enum ShellEvent {
 /// Each module gets a copy of the event sender to push ShellEvents
 /// from background threads into the main loop.
 pub trait ShellModule: Send + 'static {
-    fn register(
-        &self,
-        handle: &calloop::LoopHandle<'_, super::runtime::LoopData>,
-        tx: calloop::channel::Sender<ShellEvent>,
-    );
+    fn register(&self, handle: &LoopHandle<'_, LoopData>, tx: Sender<ShellEvent>);
+
+    /// Optional event representing current state at mount time.
+    /// Fed directly into the element tree before the first render,
+    /// so components never observe a "before any event" state.
+    fn initial_event(&self) -> Option<ShellEvent> { None }
 }
