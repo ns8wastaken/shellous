@@ -13,7 +13,7 @@ use gl::types::*;
 use crate::renderer::batch::{DrawCommand, DrawParams};
 use crate::renderer::programs::RenderProgram;
 
-// ==================== VERTEX DATA ====================\n
+// ==================== VERTEX DATA ====================
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TextVertex {
@@ -37,7 +37,7 @@ struct TextAtlas {
     cache: HashMap<(char, u32), CachedGlyph>,
 }
 
-// ==================== TEXT PROGRAM ====================\n
+// ==================== TEXT PROGRAM ====================
 pub struct TextProgram {
     program: GLuint,
     vao: GLuint,

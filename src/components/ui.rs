@@ -1,7 +1,7 @@
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
-use crate::services::workspace::WorkspaceSnapshot;
+use crate::shell::event::ShellEvent;
 use crate::shell::state::ShellState;
 
 // ==================== RENDER CONTEXT ====================
@@ -15,7 +15,7 @@ pub struct RenderContext<'a> {
 // ==================== ELEMENT ====================
 
 pub trait Element {
-    fn update(&mut self, _snapshot: &WorkspaceSnapshot) {}
+    fn update(&mut self, _event: &ShellEvent) {}
 
     fn tick_animations(&mut self, _absolute_time: f32) -> bool {
         false

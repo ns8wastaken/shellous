@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::components::rect::Rect;
 use crate::renderer::batch::DrawBatch;
-use crate::services::workspace::WorkspaceSnapshot;
 use crate::shell::compositor::Compositor;
+use crate::shell::event::ShellEvent;
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::surface::Surface;
 use crate::shell::surface_id::SurfaceId;
@@ -64,18 +64,18 @@ impl ShellState {
     }
 
     /// Called after eventfd wake. Kicks off the animation cycle.
-    pub fn sync_workspace_snapshots(&mut self) {
+    pub fn invalidate(&mut self) {
         for entry in &mut self.surfaces {
             entry.dirty.set(true);
         }
         self.animating.set(true);
     }
 
-    /// Push a fresh workspace snapshot through the element tree.
-    pub fn update_surfaces(&mut self, snapshot: &WorkspaceSnapshot) {
+    /// Push an event through the element tree.
+    pub fn update_surfaces(&mut self, event: &ShellEvent) {
         for entry in &mut self.surfaces {
             if let Some(ref mut root) = entry.root {
-                root.update(snapshot);
+                root.update(event);
             }
         }
     }

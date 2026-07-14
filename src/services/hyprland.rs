@@ -2,7 +2,6 @@ use serde::Deserialize;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::io::RawFd;
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -27,28 +26,6 @@ struct ActiveWorkspace {
     id: i32,
 }
 
-#[derive(Debug, Deserialize)]
-struct HyprOptionInt {
-    #[allow(dead_code)]
-    option: String,
-    int: i32,
-}
-
-/// Queries a Hyprland integer option via `j/getoption <name>`.
-/// Returns `None` if the env vars, socket, or JSON parse fails.
-pub fn get_option_int(name: &str) -> Option<i32> {
-    let sig = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
-    let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
-    let socket = format!("{runtime}/hypr/{sig}/.socket.sock");
-    let cmd = format!("j/getoption {name}\0");
-    let mut stream = UnixStream::connect(&socket).ok()?;
-    stream.write_all(cmd.as_bytes()).ok()?;
-    stream.shutdown(std::net::Shutdown::Write).ok()?;
-    let mut resp = String::new();
-    stream.read_to_string(&mut resp).ok()?;
-    serde_json::from_str::<HyprOptionInt>(&resp).ok().map(|o| o.int)
-}
-
 // ==================== HYPRLAND COMPOSITOR ====================
 
 struct ListenerIncarnation {
@@ -66,7 +43,6 @@ pub struct HyprlandCompositor {
     subs: Mutex<HashMap<SubscriptionId, StateCallback>>,
     listener_count: Arc<AtomicUsize>,
     next_sub_id: AtomicU64,
-    wake_fd: RawFd,
 }
 
 impl HyprlandCompositor {
@@ -75,16 +51,12 @@ impl HyprlandCompositor {
             .expect("HYPRLAND_INSTANCE_SIGNATURE not set -- is this running under Hyprland?");
         let runtime = std::env::var("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR not set");
 
-        let wake_fd = unsafe { libc::eventfd(0, libc::EFD_NONBLOCK | libc::EFD_CLOEXEC) };
-        assert!(wake_fd >= 0, "eventfd creation failed");
-
         Self {
             cmd_socket: format!("{runtime}/hypr/{sig}/.socket.sock"),
             evt_socket: format!("{runtime}/hypr/{sig}/.socket2.sock"),
             subs: Mutex::new(HashMap::new()),
             listener_count: Arc::new(AtomicUsize::new(0)),
             next_sub_id: AtomicU64::new(1),
-            wake_fd,
         }
     }
 
@@ -140,16 +112,6 @@ impl HyprlandCompositor {
                                     cb(event.clone());
                                 }
                             }
-
-                            // Wake the main thread
-                            let val: u64 = 1;
-                            unsafe {
-                                libc::write(
-                                    self.wake_fd,
-                                    &val as *const u64 as *const std::ffi::c_void,
-                                    8,
-                                );
-                            }
                         }
                     }
                 }
@@ -160,12 +122,6 @@ impl HyprlandCompositor {
 
             thread::sleep(Duration::from_millis(100));
         }
-    }
-}
-
-impl Drop for HyprlandCompositor {
-    fn drop(&mut self) {
-        unsafe { libc::close(self.wake_fd); }
     }
 }
 
@@ -238,9 +194,5 @@ impl Compositor for HyprlandCompositor {
 
     fn unsubscribe(&self, id: SubscriptionId) -> bool {
         self.subs.lock().unwrap().remove(&id).is_some()
-    }
-
-    fn wake_fd(&self) -> RawFd {
-        self.wake_fd
     }
 }

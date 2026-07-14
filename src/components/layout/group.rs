@@ -1,8 +1,8 @@
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
-use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
+use crate::shell::event::ShellEvent;
 
 // ==================== GROUP ====================
 
@@ -19,9 +19,9 @@ impl Group {
 }
 
 impl Element for Group {
-    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
+    fn update(&mut self, event: &ShellEvent) {
         for child in &mut self.children {
-            child.update(snapshot);
+            child.update(event);
         }
     }
 

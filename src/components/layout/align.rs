@@ -2,8 +2,8 @@ use crate::components::layout::Alignment;
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::renderer::batch::DrawBatch;
-use crate::services::workspace::WorkspaceSnapshot;
 use crate::components::ui::{Element, RenderContext};
+use crate::shell::event::ShellEvent;
 
 // ==================== ALIGN ====================
 
@@ -19,8 +19,8 @@ impl Align {
 }
 
 impl Element for Align {
-    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
-        self.child.update(snapshot);
+    fn update(&mut self, event: &ShellEvent) {
+        self.child.update(event);
     }
 
     fn tick_animations(&mut self, absolute_time: f32) -> bool {

@@ -6,7 +6,7 @@ use crate::renderer::animation::easing::Easing;
 use crate::renderer::batch::{DrawBatch, DrawParams};
 use crate::renderer::programs::rect::RectStyle;
 use crate::renderer::types::Color;
-use crate::services::workspace::WorkspaceSnapshot;
+use crate::shell::event::ShellEvent;
 
 pub(super) const WORKSPACE_R: f32 = 5.5;
 const WORKSPACE_INACTIVE_W: f32 = WORKSPACE_R * 2.0;
@@ -31,8 +31,10 @@ impl WorkspaceDot {
 }
 
 impl Element for WorkspaceDot {
-    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
-        self.is_active = snapshot.active_id == self.workspace_id;
+    fn update(&mut self, event: &ShellEvent) {
+        if let ShellEvent::WorkspaceUpdated(snapshot) = event {
+            self.is_active = snapshot.active_id == self.workspace_id;
+        }
     }
 
     fn tick_animations(&mut self, absolute_time: f32) -> bool {

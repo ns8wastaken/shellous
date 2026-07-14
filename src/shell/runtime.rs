@@ -1,13 +1,19 @@
 use std::cell::Cell;
-use std::os::unix::io::{AsFd, AsRawFd};
+use std::os::unix::io::AsFd;
 use std::sync::Arc;
 use std::time::Instant;
 
+use calloop::{
+    channel::{self, Sender},
+    generic::Generic,
+    EventLoop, Interest, Mode, PostAction,
+};
+
 use crate::components::ui::Element;
 use crate::renderer::Renderer;
-use crate::services::workspace::WorkspaceService;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
+use crate::shell::event::{ShellEvent, ShellModule};
 use crate::shell::layer_surface::{LayerSurface, ShellAnchor, ShellLayer};
 use crate::shell::managed_surface::ManagedSurface;
 use crate::shell::state::ShellState;
@@ -41,35 +47,104 @@ pub enum SurfaceSpec {
     Toplevel(ToplevelSpec),
 }
 
+// ==================== CALLOP LOOP DATA ====================
+
+/// All mutable state that calloop source callbacks can access.
+pub struct LoopData {
+    pub wayland: WaylandState,
+    pub state: ShellState,
+    pub egl: Arc<EglState>,
+    pub anim_start: Instant,
+    pub event_tx: Sender<ShellEvent>,
+}
+
+impl LoopData {
+    pub fn process_wayland(&mut self) {
+        let _ = self.wayland.conn.flush();
+        loop {
+            let count = self.wayland.event_queue.dispatch_pending(&mut self.state);
+            if count.unwrap_or(0) == 0 {
+                break;
+            }
+        }
+        if let Some(guard) = self.wayland.event_queue.prepare_read() {
+            if guard.read().is_ok() {
+                loop {
+                    let count = self.wayland.event_queue.dispatch_pending(&mut self.state);
+                    if count.unwrap_or(0) == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn handle_event(&mut self, event: ShellEvent) {
+        self.state.invalidate();
+        self.state.update_surfaces(&event);
+    }
+
+    fn render_frame(&mut self) {
+        if !self.state.any_dirty() {
+            return;
+        }
+
+        let absolute_time = self.anim_start.elapsed().as_secs_f32();
+        let still_moving = self.state.tick_animations(absolute_time);
+
+        if still_moving {
+            let qh = self.wayland.qh();
+            for entry in &self.state.surfaces {
+                if entry.animating.get() && entry.renderer.is_some() {
+                    entry.request_frame(qh);
+                }
+            }
+        }
+
+        self.state.compute_layouts();
+        self.state.render();
+
+        for entry in &mut self.state.surfaces {
+            entry.dirty.set(false);
+        }
+
+        if !still_moving {
+            self.state.set_animating(false);
+        }
+
+        let _ = self.wayland.conn.flush();
+    }
+}
+
 // ==================== SHELL ====================
 
 pub struct Shell {
     wayland: WaylandState,
     state: ShellState,
     egl: Arc<EglState>,
-    workspace: Arc<WorkspaceService>,
+    event_tx: Sender<ShellEvent>,
+    event_rx: channel::Channel<ShellEvent>,
 }
 
 impl Shell {
     pub fn new(compositor: Arc<dyn Compositor>) -> Self {
+        let (event_tx, event_rx) = channel::channel::<ShellEvent>();
+
         let wayland = WaylandState::new();
         let state = ShellState::new(Arc::clone(&compositor));
         let egl = EglState::new(&wayland.conn);
-        let workspace = Arc::new(WorkspaceService::new(Arc::clone(&compositor)));
+
         Self {
             wayland,
             state,
             egl,
-            workspace,
+            event_tx,
+            event_rx,
         }
     }
 
     pub fn compositor(&self) -> &Arc<dyn Compositor> {
         &self.state.compositor
-    }
-
-    pub fn workspace(&self) -> &Arc<WorkspaceService> {
-        &self.workspace
     }
 
     pub fn mount(&mut self, config: SurfaceSpec) -> SurfaceId {
@@ -143,111 +218,63 @@ impl Shell {
         id
     }
 
-    pub fn run(&mut self) {
-        let shell_start = Instant::now();
+    pub fn run(self, modules: Vec<Box<dyn ShellModule>>) {
+        let mut event_loop = EventLoop::<LoopData>::try_new()
+            .expect("initialize calloop event loop");
 
-        // Initial data push before the first frame
-        self.state.update_surfaces(&self.workspace.handle().snapshot());
+        let handle = event_loop.handle();
 
-        let wayland_fd = self.wayland.conn.as_fd().as_raw_fd();
-        let wake_fd = self.state.compositor.wake_fd();
-
-        let mut fds = [
-            libc::pollfd {
-                fd: wayland_fd,
-                events: libc::POLLIN,
-                revents: 0,
-            },
-            libc::pollfd {
-                fd: wake_fd,
-                events: libc::POLLIN,
-                revents: 0,
-            },
-        ];
-
-        loop {
-            // 1. Flush outbound requests
-            let _ = self.wayland.conn.flush();
-
-            // 2. Drain already-buffered events
-            while let Ok(count) = self.wayland.event_queue.dispatch_pending(&mut self.state) {
-                if count == 0 {
-                    break;
-                }
-            }
-
-            // 3. Prepare read guard
-            let read_guard = match self.wayland.event_queue.prepare_read() {
-                Some(guard) => guard,
-                None => continue,  // events already buffered — loop to dispatch
-            };
-
-            // 4. Compute poll timeout from state matrix
-            let timeout = if self.state.any_dirty() { 0 } else { -1 };
-
-            // 5. Block on kernel
-            let poll_ret = unsafe {
-                libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout)
-            };
-
-            if poll_ret < 0 {
-                let err = std::io::Error::last_os_error();
-                if err.kind() != std::io::ErrorKind::Interrupted {
-                    break;
-                }
-                continue;
-            }
-
-            // 6a. Process Wayland socket
-            if (fds[0].revents & libc::POLLIN) != 0 {
-                if read_guard.read().is_ok() {
-                    let _ = self.wayland.event_queue.dispatch_pending(&mut self.state);
-                }
-            } else {
-                std::mem::drop(read_guard);
-            }
-
-            // 6b. Process eventfd wake (workspace change)
-            if (fds[1].revents & libc::POLLIN) != 0 {
-                let mut buf = [0u8; 8];
-                unsafe {
-                    libc::read(
-                        wake_fd,
-                        buf.as_mut_ptr() as *mut std::ffi::c_void,
-                        8,
-                    );
-                }
-                self.state.sync_workspace_snapshots();
-                self.state.update_surfaces(&self.workspace.handle().snapshot());
-            }
-
-            // 7. Compute absolute time
-            let absolute_time = shell_start.elapsed().as_secs_f32();
-
-            // 8. Tick, Layout, & Render phase
-            if self.state.any_dirty() {
-                let still_moving = self.state.tick_animations(absolute_time);
-
-                if still_moving {
-                    let qh = self.wayland.qh();
-                    for entry in &self.state.surfaces {
-                        if entry.animating.get() && entry.renderer.is_some() {
-                            entry.request_frame(qh);
-                        }
+        // 1. Core Channel Listener
+        handle
+            .insert_source(
+                self.event_rx,
+                |event, _metadata, data: &mut LoopData| {
+                    match event {
+                        channel::Event::Msg(evt) => data.handle_event(evt),
+                        channel::Event::Closed => {}
                     }
-                }
+                    data.render_frame();
+                },
+            )
+            .expect("insert_source event_rx");
 
-                self.state.compute_layouts();
-                self.state.render();
+        // 2. Wayland Descriptor Listener
+        let wayland_fd = self
+            .wayland
+            .conn
+            .as_fd()
+            .try_clone_to_owned()
+            .expect("clone wayland fd");
+        handle
+            .insert_source(
+                Generic::new(wayland_fd, Interest::READ, Mode::Level),
+                |_readiness, _file, data: &mut LoopData| {
+                    data.process_wayland();
+                    data.render_frame();
+                    Ok(PostAction::Continue)
+                },
+            )
+            .expect("insert_source wayland");
 
-                for entry in &mut self.state.surfaces {
-                    entry.dirty.set(false);
-                }
-
-                if !still_moving {
-                    self.state.set_animating(false);
-                }
-            }
+        // 3. Register pluggable background modules
+        for module in &modules {
+            module.register(&handle, self.event_tx.clone());
         }
+
+        let mut data = LoopData {
+            wayland: self.wayland,
+            state: self.state,
+            egl: self.egl,
+            anim_start: Instant::now(),
+            event_tx: self.event_tx,
+        };
+
+        // Note: Individual components now read initial layout seed values via their
+        // injected handles upon creation rather than the runtime manually pushing it.
+        data.render_frame();
+
+        event_loop
+            .run(None::<std::time::Duration>, &mut data, |_data| {})
+            .expect("event_loop run");
     }
 }

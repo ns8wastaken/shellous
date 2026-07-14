@@ -1,5 +1,6 @@
 pub mod compositor;
 pub mod egl;
+pub mod event;
 pub mod layer_surface;
 pub mod managed_surface;
 pub mod runtime;

@@ -8,14 +8,24 @@ pub(super) const CORNER_RADIUS: f32 = BAR_HEIGHT * 0.5;
 use crate::components::layout::Alignment;
 use crate::components::layout::align::Align;
 use crate::components::layout::group::Group;
+use crate::components::ui::Element;
+use crate::services::workspace::WorkspaceHandle;
+use crate::shell::event::ShellEvent;
 use crate::shell::layer_surface::{ShellAnchor, ShellLayer};
 use crate::shell::runtime::{LayerSpec, Shell, SurfaceSpec};
 
 use left::LeftPanel;
 use middle::MiddlePanel;
 
-pub fn mount(shell: &mut Shell) {
+pub fn mount(shell: &mut Shell, workspace_handle: WorkspaceHandle) {
     let offset = 18;
+
+    let initial_snapshot = workspace_handle.snapshot();
+
+    let mut left_panel = LeftPanel::new(offset as f32);
+
+    // Initial update before rendering
+    left_panel.update(&ShellEvent::WorkspaceUpdated(initial_snapshot));
 
     shell.mount(SurfaceSpec::Layer(LayerSpec {
         namespace: "shellous:bar".into(),
@@ -25,7 +35,7 @@ pub fn mount(shell: &mut Shell) {
         exclusive_zone: BAR_HEIGHT as i32,
         layer: ShellLayer::Top,
         root: Some(Box::new(Group::new(vec![
-            Box::new(LeftPanel::new(offset as f32)),
+            Box::new(left_panel),
             Box::new(Align::new(
                 Box::new(MiddlePanel::default()),
                 Alignment::TopCenter,

@@ -9,7 +9,7 @@ use crate::renderer::batch::{DrawBatch, DrawParams};
 use crate::renderer::programs::rect::{
     CornerShape, RectStyle,
 };
-use crate::services::workspace::WorkspaceSnapshot;
+use crate::shell::event::ShellEvent;
 use super::{BAR_HEIGHT, workspace_dot::{WorkspaceDot, WORKSPACE_R}};
 
 const WORKSPACE_SPACING: f32 = 8.0;
@@ -17,8 +17,6 @@ const WORKSPACE_SPACING: f32 = 8.0;
 const LEFT_PAD: f32 = BAR_HEIGHT / 2.0;
 const RIGHT_PAD: f32 = BAR_HEIGHT;
 const TOP: f32 = BAR_HEIGHT / 2.0 - WORKSPACE_R;
-
-// ==================== LEFT PANEL ====================
 
 pub struct LeftPanel {
     dots: KeyedList<i32, WorkspaceDot>,
@@ -49,12 +47,14 @@ impl LeftPanel {
 }
 
 impl Element for LeftPanel {
-    fn update(&mut self, snapshot: &WorkspaceSnapshot) {
-        let mut cur_ids: Vec<i32> = snapshot.workspaces.iter().map(|w| w.id).collect();
-        cur_ids.sort_unstable();
-        self.dots.reconcile(&cur_ids, |id| WorkspaceDot::new(id));
-        for dot in self.dots.iter_mut() {
-            dot.update(snapshot);
+    fn update(&mut self, event: &ShellEvent) {
+        if let ShellEvent::WorkspaceUpdated(snapshot) = event {
+            let mut cur_ids: Vec<i32> = snapshot.workspaces.iter().map(|w| w.id).collect();
+            cur_ids.sort_unstable();
+            self.dots.reconcile(&cur_ids, |id| WorkspaceDot::new(id));
+            for dot in self.dots.iter_mut() {
+                dot.update(event);
+            }
         }
     }
 
