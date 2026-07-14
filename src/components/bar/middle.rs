@@ -58,11 +58,12 @@ impl Element for MiddlePanel {
 
         batch.push(
             text_rect,
-            DrawParams::Text(TextStyle {
-                text: "Hello World".to_string(),
-                font_size: 12.0,
-                color: Color::rgb(1.0, 1.0, 1.0),
-            })
+            DrawParams::Text(
+                TextStyle::new()
+                    .text("Hello World")
+                    .size(12.0)
+                    .color(Color::rgb(1.0, 1.0, 1.0))
+            )
         );
     }
 }

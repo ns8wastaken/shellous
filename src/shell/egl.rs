@@ -3,7 +3,7 @@ use khronos_egl as egl;
 use libloading::Library;
 
 use crate::renderer::batch::Shape;
-use crate::renderer::programs::program::ProgramRegistry;
+use crate::renderer::programs::ProgramRegistry;
 use crate::renderer::programs::rect::RectProgram;
 use crate::renderer::programs::text::TextProgram;
 

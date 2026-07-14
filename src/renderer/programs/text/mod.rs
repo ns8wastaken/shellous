@@ -1,3 +1,7 @@
+mod style;
+
+pub use style::TextStyle;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -6,17 +10,8 @@ use std::ptr;
 use fontdue::{Font, layout::{Layout, CoordinateSystem, TextStyle as FTextStyle}};
 use gl::types::*;
 
-use crate::renderer::types::Color;
 use crate::renderer::batch::{DrawCommand, DrawParams};
-use crate::renderer::programs::program::ShapeProgram;
-
-// ==================== STYLE ====================\n
-#[derive(Clone, Debug)]
-pub struct TextStyle {
-    pub text: String,
-    pub font_size: f32,
-    pub color: Color,
-}
+use crate::renderer::programs::RenderProgram;
 
 // ==================== VERTEX DATA ====================\n
 #[repr(C)]
@@ -58,8 +53,8 @@ impl TextProgram {
         let font = Font::from_bytes(font_bytes, fontdue::FontSettings::default())
             .expect("failed to parse interface font");
 
-        let vert_src = include_str!("../shaders/text.vert");
-        let frag_src = include_str!("../shaders/text.frag");
+        let vert_src = include_str!("text.vert");
+        let frag_src = include_str!("text.frag");
 
         let mut atlas_id: GLuint = 0;
         let mut vao = 0;
@@ -125,7 +120,7 @@ impl TextProgram {
     }
 }
 
-impl ShapeProgram for TextProgram {
+impl RenderProgram for TextProgram {
     fn draw_batch(&self, commands: &[DrawCommand], surface_w: f32, surface_h: f32) {
         if commands.is_empty() { return; }
 

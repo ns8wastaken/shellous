@@ -13,7 +13,6 @@ pub enum Shape {
 
 // ==================== DRAW COMMAND ====================
 
-// #[derive(Clone, Debug)]
 pub enum DrawParams {
     Rect(RectStyle),
     Text(TextStyle),

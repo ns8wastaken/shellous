@@ -109,7 +109,7 @@ impl Renderer {
     /// controls its own draw strategy — the default iterates individual
     /// commands, but programs may override with instanced rendering.
     ///
-    /// Adding a new shape = register a `ShapeProgram` in `EglState`.
+    /// Adding a new shape = register a `RenderProgram` in `EglState`.
     /// No pipeline code changes needed.
     pub fn render_batch(&self, batch: &DrawBatch, surface_w: f32, surface_h: f32) {
         for (shape, cmds) in batch.shape_groups() {
