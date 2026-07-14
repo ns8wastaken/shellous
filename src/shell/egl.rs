@@ -30,14 +30,10 @@ impl EglState {
         egl.initialize(display).expect("eglInitialize failed");
 
         let config_attribs = [
-            egl::RED_SIZE,
-            8,
-            egl::GREEN_SIZE,
-            8,
-            egl::BLUE_SIZE,
-            8,
-            egl::ALPHA_SIZE,
-            8,
+            egl::RED_SIZE, 8,
+            egl::GREEN_SIZE, 8,
+            egl::BLUE_SIZE, 8,
+            egl::ALPHA_SIZE, 8,
             egl::RENDERABLE_TYPE,
             egl::OPENGL_ES2_BIT,
             egl::SURFACE_TYPE,

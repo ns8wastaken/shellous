@@ -140,9 +140,6 @@ impl ShapeProgram for TextProgram {
 
             gl::BindVertexArray(self.vao);
             gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
-
-            gl::Enable(gl::BLEND);
-            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
         }
 
         for cmd in commands {
@@ -242,11 +239,19 @@ impl ShapeProgram for TextProgram {
 impl Drop for TextProgram {
     fn drop(&mut self) {
         unsafe {
-            if self.program != 0 { gl::DeleteProgram(self.program); }
-            if self.vao != 0 { gl::DeleteVertexArrays(1, &self.vao); }
-            if self.vbo != 0 { gl::DeleteBuffers(1, &self.vbo); }
+            if self.program != 0 {
+                gl::DeleteProgram(self.program);
+            }
+            if self.vao != 0 {
+                gl::DeleteVertexArrays(1, &self.vao);
+            }
+            if self.vbo != 0 {
+                gl::DeleteBuffers(1, &self.vbo);
+            }
             let atlas = self.atlas.borrow();
-            if atlas.atlas_id != 0 { gl::DeleteTextures(1, &atlas.atlas_id); }
+            if atlas.atlas_id != 0 {
+                gl::DeleteTextures(1, &atlas.atlas_id);
+            }
         }
     }
 }
