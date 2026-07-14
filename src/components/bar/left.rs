@@ -5,7 +5,7 @@ use crate::components::keyed_list::KeyedList;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
-use crate::renderer::batch::DrawBatch;
+use crate::renderer::batch::{DrawBatch, DrawParams};
 use crate::renderer::programs::rect::{
     CornerShape, RectStyle,
 };
@@ -115,17 +115,19 @@ impl Element for LeftPanel {
         // Shadow pass
         batch.push(
             bg_rect,
-            base_style
-                .clone()
-                .fill(0.0, 0.0, 0.0, 0.5)
-                .softness(10.0)
-                .shadow(0.0, 0.0),
+            DrawParams::Rect(
+                base_style
+                    .clone()
+                    .fill(0.0, 0.0, 0.0, 0.5)
+                    .softness(10.0)
+                    .shadow(0.0, 0.0)
+            )
         );
 
         // Fill pass
         batch.push(
             bg_rect,
-            base_style.fill(0.085, 0.095, 0.110, 1.0),
+            DrawParams::Rect(base_style.fill(0.085, 0.095, 0.110, 1.0)),
         );
 
         // Dot row

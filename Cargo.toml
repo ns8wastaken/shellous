@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+fontdue = "0.9.3"
 gl = "0.14.0"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 libc = "0.2"

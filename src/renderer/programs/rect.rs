@@ -5,8 +5,9 @@ use std::ptr;
 
 use gl::types::*;
 
-use crate::renderer::batch::DrawCommand;
+use crate::renderer::batch::{DrawCommand, DrawParams};
 use crate::renderer::programs::program::ShapeProgram;
+use crate::renderer::types::Color;
 
 // ==================== SUPPORTING STRUCTURES ====================
 
@@ -23,14 +24,6 @@ pub enum GradientDirection {
     #[default]
     Horizontal,
     Vertical,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Color {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -334,7 +327,11 @@ impl ShapeProgram for RectProgram {
             if w <= 0.0 || h <= 0.0 {
                 continue;
             }
-            let style = &cmd.style;
+
+            let style = match &cmd.params {
+                DrawParams::Rect(s) => s,
+                _ => continue,
+            };
 
             let padding = (style.border_width + style.softness + 2.0).max(2.0);
             let quad_w = w + padding * 2.0;

@@ -3,10 +3,9 @@ use crate::components::rect::Size;
 use crate::components::ui::{Element, RenderContext};
 use crate::renderer::animation::Animated;
 use crate::renderer::animation::easing::Easing;
-use crate::renderer::batch::DrawBatch;
-use crate::renderer::programs::rect::{
-    Color, RectStyle,
-};
+use crate::renderer::batch::{DrawBatch, DrawParams};
+use crate::renderer::programs::rect::RectStyle;
+use crate::renderer::types::Color;
 use crate::services::workspace::WorkspaceSnapshot;
 
 pub(super) const WORKSPACE_R: f32 = 5.5;
@@ -55,7 +54,10 @@ impl Element for WorkspaceDot {
         } else {
             Color { r: 0.25, g: 0.28, b: 0.35, a: 1.0 }
         };
-        batch.push(node.rect, RectStyle::solid(fill, WORKSPACE_R));
+        batch.push(
+            node.rect,
+            DrawParams::Rect(RectStyle::solid(fill, WORKSPACE_R))
+        );
     }
 
     fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {

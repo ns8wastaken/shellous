@@ -3,7 +3,8 @@ use std::sync::Arc;
 use wayland_egl::WlEglSurface;
 use wayland_client::Proxy;
 
-use crate::renderer::batch::DrawBatch;
+use super::batch::DrawBatch;
+use super::text::TextRenderer;
 use crate::shell::egl::EglState;
 use crate::components::ui::RenderContext;
 
@@ -17,6 +18,7 @@ pub struct Renderer {
     egl_surface: khronos_egl::Surface,
     width: i32,
     height: i32,
+    pub text_engine: TextRenderer,
     #[allow(dead_code)]
     _wl_egl_surface: WlEglSurface,
 }
@@ -64,6 +66,7 @@ impl Renderer {
             egl_surface,
             width,
             height,
+            text_engine: TextRenderer::new(1024, 1024),
             _wl_egl_surface: wl_egl_surface,
         }
     }

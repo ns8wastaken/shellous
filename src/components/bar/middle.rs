@@ -1,7 +1,7 @@
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::Size;
 use crate::components::ui::{Element, RenderContext};
-use crate::renderer::batch::DrawBatch;
+use crate::renderer::batch::{DrawBatch, DrawParams};
 use crate::renderer::programs::rect::{
     CornerShape, RectStyle,
 };
@@ -36,16 +36,18 @@ impl Element for MiddlePanel {
 
         batch.push(
             node.rect,
-            base_style
-                .clone()
-                .fill(0.0, 0.0, 0.0, 0.5)
-                .softness(10.0)
-                .shadow(0.0, 0.0),
+            DrawParams::Rect(
+                base_style
+                    .clone()
+                    .fill(0.0, 0.0, 0.0, 0.5)
+                    .softness(10.0)
+                    .shadow(0.0, 0.0)
+            )
         );
 
         batch.push(
             node.rect,
-            base_style.fill(0.085, 0.095, 0.110, 1.0),
+            DrawParams::Rect(base_style.fill(0.085, 0.095, 0.110, 1.0)),
         );
     }
 }

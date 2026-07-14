@@ -1,5 +1,8 @@
+pub mod types;
 pub mod animation;
 pub mod batch;
 pub mod programs;
-mod renderer;
+pub mod renderer;
+pub mod text;
+
 pub use renderer::Renderer;
