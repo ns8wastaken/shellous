@@ -81,14 +81,18 @@ impl ShellState {
     }
 
     /// Update phase — tick all element animations. Returns true if any
-    /// animation is still active.
+    /// animation is still active. Also tracks per-surface animation state.
     pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let mut still_moving = false;
         for entry in &mut self.surfaces {
             if entry.renderer.is_some() && entry.dirty.get() {
-                if entry.tick_animations(absolute_time) {
+                let active = entry.tick_animations(absolute_time);
+                entry.animating.set(active);
+                if active {
                     still_moving = true;
                 }
+            } else {
+                entry.animating.set(false);
             }
         }
         still_moving

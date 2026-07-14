@@ -16,6 +16,7 @@ pub struct ManagedSurface {
     pub renderer: Option<crate::renderer::Renderer>,
     pub frame_pending: Cell<bool>,
     pub dirty: Cell<bool>,
+    pub animating: Cell<bool>,
     pub layout: Option<LayoutNode>,
 }
 

@@ -6,8 +6,7 @@ use crate::renderer::programs::rect::RectStyle;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Shape {
     #[default]
-    Rect = 0,
-    Circle = 1,
+    Rect,
 }
 
 // ==================== DRAW COMMAND ====================

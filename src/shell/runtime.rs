@@ -116,6 +116,7 @@ impl Shell {
             renderer: None,
             frame_pending: Cell::new(false),
             dirty: Cell::new(true),
+            animating: Cell::new(false),
             layout: None,
         });
 
@@ -230,8 +231,7 @@ impl Shell {
                 if still_moving {
                     let qh = self.wayland.qh();
                     for entry in &self.state.surfaces {
-                        // NOTE: not checking `entry.dirty.get()` while animating
-                        if entry.renderer.is_some() {
+                        if entry.animating.get() && entry.renderer.is_some() {
                             entry.request_frame(qh);
                         }
                     }

@@ -3,7 +3,6 @@ use khronos_egl as egl;
 use libloading::Library;
 
 use crate::renderer::batch::Shape;
-use crate::renderer::programs::circle::CircleProgram;
 use crate::renderer::programs::program::ProgramRegistry;
 use crate::renderer::programs::rect::RectProgram;
 
@@ -70,7 +69,6 @@ impl EglState {
 
         let mut programs = ProgramRegistry::new();
         programs.register(Shape::Rect, RectProgram::new());
-        programs.register(Shape::Circle, CircleProgram::new());
         let mut vao: GLuint = 0;
         unsafe {
             gl::GenVertexArrays(1, &mut vao);
