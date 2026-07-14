@@ -5,6 +5,7 @@ use libloading::Library;
 use crate::renderer::batch::Shape;
 use crate::renderer::programs::program::ProgramRegistry;
 use crate::renderer::programs::rect::RectProgram;
+use crate::renderer::programs::text::TextProgram;
 
 pub struct EglState {
     pub egl: egl::DynamicInstance<egl::EGL1_4>,
@@ -67,8 +68,17 @@ impl EglState {
                 .unwrap_or(std::ptr::null()) as *const std::ffi::c_void
         });
 
+        // ==================== PROGRAM REGISTRY ====================
+
         let mut programs = ProgramRegistry::new();
+
         programs.register(Shape::Rect, RectProgram::new());
+
+        // Load a default font
+        // TODO: use system font or let user load it
+        let font_bytes = include_bytes!("../../Comfortaa-Font/static/Comfortaa-Medium.ttf");
+        programs.register(Shape::Text, TextProgram::new(font_bytes, 1024, 1024));
+
         let mut vao: GLuint = 0;
         unsafe {
             gl::GenVertexArrays(1, &mut vao);

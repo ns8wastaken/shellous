@@ -5,6 +5,8 @@ use crate::renderer::batch::{DrawBatch, DrawParams};
 use crate::renderer::programs::rect::{
     CornerShape, RectStyle,
 };
+use crate::renderer::programs::text::TextStyle;
+use crate::renderer::types::Color;
 use super::{BAR_HEIGHT, CORNER_RADIUS};
 
 pub struct MiddlePanel {
@@ -48,6 +50,19 @@ impl Element for MiddlePanel {
         batch.push(
             node.rect,
             DrawParams::Rect(base_style.fill(0.085, 0.095, 0.110, 1.0)),
+        );
+
+        let mut text_rect = node.rect;
+        text_rect.x += 20.0; // Left padding offset
+        text_rect.y += 10.0; // Top padding offset matching your design bounds
+
+        batch.push(
+            text_rect,
+            DrawParams::Text(TextStyle {
+                text: "Hello World".to_string(),
+                font_size: 12.0,
+                color: Color::rgb(1.0, 1.0, 1.0),
+            })
         );
     }
 }

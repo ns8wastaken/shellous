@@ -9,8 +9,6 @@ use crate::renderer::batch::{DrawCommand, DrawParams};
 use crate::renderer::programs::program::ShapeProgram;
 use crate::renderer::types::Color;
 
-// ==================== SUPPORTING STRUCTURES ====================
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum FillMode {
     #[default]
