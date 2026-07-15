@@ -19,8 +19,8 @@ impl Align {
 }
 
 impl Element for Align {
-    fn update(&mut self, event: &ShellEvent) {
-        self.child.update(event);
+    fn update(&mut self, event: &ShellEvent) -> bool {
+        self.child.update(event)
     }
 
     fn tick_animations(&mut self, absolute_time: f32) -> bool {

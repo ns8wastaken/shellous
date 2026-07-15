@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 calloop = "0.14.4"
+chrono = "0.4.45"
 fontdue = "0.9.3"
 gl = "0.14.0"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }

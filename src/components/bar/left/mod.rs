@@ -1,3 +1,5 @@
+mod workspace_dot;
+
 use crate::components::layout::stack_horizontal;
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
@@ -10,7 +12,8 @@ use crate::renderer::programs::rect::{
     CornerShape, RectStyle,
 };
 use crate::shell::event::ShellEvent;
-use super::{BAR_HEIGHT, workspace_dot::{WorkspaceDot, WORKSPACE_R}};
+use crate::components::bar::BAR_HEIGHT;
+use workspace_dot::{WorkspaceDot, WORKSPACE_R};
 
 const WORKSPACE_SPACING: f32 = 8.0;
 
@@ -47,7 +50,7 @@ impl LeftPanel {
 }
 
 impl Element for LeftPanel {
-    fn update(&mut self, event: &ShellEvent) {
+    fn update(&mut self, event: &ShellEvent) -> bool {
         if let ShellEvent::WorkspaceUpdated(snapshot) = event {
             let mut cur_ids: Vec<i32> = snapshot.workspaces.iter().map(|w| w.id).collect();
             cur_ids.sort_unstable();
@@ -55,6 +58,9 @@ impl Element for LeftPanel {
             for dot in self.dots.iter_mut() {
                 dot.update(event);
             }
+            true
+        } else {
+            false
         }
     }
 

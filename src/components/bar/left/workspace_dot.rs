@@ -31,9 +31,13 @@ impl WorkspaceDot {
 }
 
 impl Element for WorkspaceDot {
-    fn update(&mut self, event: &ShellEvent) {
+    fn update(&mut self, event: &ShellEvent) -> bool {
         if let ShellEvent::WorkspaceUpdated(snapshot) = event {
+            let was_active = self.is_active;
             self.is_active = snapshot.active_id == self.workspace_id;
+            was_active != self.is_active
+        } else {
+            false
         }
     }
 

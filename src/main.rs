@@ -10,6 +10,7 @@ mod shell;
 use std::sync::Arc;
 
 use crate::components::bar;
+use crate::services::clock::ClockService;
 use crate::services::hyprland::HyprlandCompositor;
 use crate::services::workspace::WorkspaceService;
 use crate::shell::compositor::Compositor;
@@ -20,13 +21,13 @@ fn main() {
     let compositor: Arc<dyn Compositor> = Arc::new(HyprlandCompositor::new());
     let mut shell = Shell::new(compositor.clone());
 
-    let workspace_service = WorkspaceService::new(compositor);
-    // let tray_service = TrayService::new(); // <-- Add future modules here
-
     bar::mount(&mut shell);
 
+    // let tray_service = TrayService::new(); // <-- Add future modules here
+
     let modules: Vec<Box<dyn ShellModule>> = vec![
-        Box::new(workspace_service),
+        Box::new(WorkspaceService::new(compositor)),
+        Box::new(ClockService::new()),
         // Box::new(tray_service); // <-- Add future service lifecycles here
     ];
 

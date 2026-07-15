@@ -5,7 +5,6 @@ use wayland_client::Proxy;
 
 use super::batch::DrawBatch;
 use crate::shell::egl::EglState;
-use crate::components::ui::RenderContext;
 
 // ==================== RENDERER ====================
 
@@ -84,7 +83,7 @@ impl Renderer {
 
     /// Render a single frame for this surface.
     ///
-    pub fn render_frame(&self, ctx: &RenderContext, draw: impl FnOnce()) {
+    pub fn render_frame(&self, draw: impl FnOnce()) {
         unsafe {
             gl::Viewport(0, 0, self.width, self.height);
             gl::ClearColor(0.0, 0.0, 0.0, 0.0);
@@ -93,7 +92,6 @@ impl Renderer {
             gl::BindVertexArray(self.egl.vao);
         }
 
-        let _ = ctx;
         draw();
 
         self.egl

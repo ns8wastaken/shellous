@@ -15,7 +15,7 @@ pub struct RenderContext<'a> {
 // ==================== ELEMENT ====================
 
 pub trait Element {
-    fn update(&mut self, _event: &ShellEvent) {}
+    fn update(&mut self, _event: &ShellEvent) -> bool { false }
 
     fn tick_animations(&mut self, _absolute_time: f32) -> bool {
         false

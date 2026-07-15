@@ -1,17 +1,16 @@
 use calloop::{LoopHandle, channel::Sender};
 
 use super::runtime::LoopData;
-use crate::services::workspace::WorkspaceSnapshot;
+use crate::services::{clock::ClockSnapshot, workspace::WorkspaceSnapshot};
 
 // ==================== SHELL EVENT ====================
 
 #[derive(Clone, Debug)]
 pub enum ShellEvent {
+    ClockUpdated(ClockSnapshot),
     WorkspaceUpdated(WorkspaceSnapshot),
-    // TrayChanged,
+    // TrayChanged(..),
     // add MprisChanged(..), Notification(..) here.
-    // Each variant needs ~3 lines: enum def, match arm in LoopData::handle_event,
-    // and a ShellModule impl.
 }
 
 // ==================== MODULE TRAIT ====================

@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::sync::Arc;
 
 use crate::components::rect::Rect;
@@ -15,7 +14,6 @@ pub struct ShellState {
     pub focused_surface: Option<SurfaceId>,
     pub pointer_pos: Option<(f64, f64)>,
     pub next_id: SurfaceId,
-    pub animating: Cell<bool>,
 }
 
 impl ShellState {
@@ -26,7 +24,6 @@ impl ShellState {
             focused_surface: None,
             pointer_pos: None,
             next_id: 0,
-            animating: Cell::new(false),
         }
     }
 
@@ -44,55 +41,36 @@ impl ShellState {
         self.surfaces.iter_mut().find(|s| s.id == id)
     }
 
-    pub fn pointer_pos_for(&self, id: SurfaceId) -> Option<(f64, f64)> {
-        match self.focused_surface {
-            Some(focused_id) if focused_id == id => self.pointer_pos,
-            _ => None,
-        }
-    }
-
-    pub fn is_animating(&self) -> bool {
-        self.animating.get()
-    }
-
-    pub fn set_animating(&self, v: bool) {
-        self.animating.set(v);
-    }
-
     pub fn any_dirty(&self) -> bool {
         self.surfaces.iter().any(|s| s.dirty.get())
     }
 
-    /// Called after eventfd wake. Kicks off the animation cycle.
-    pub fn invalidate(&mut self) {
-        for entry in &mut self.surfaces {
-            entry.dirty.set(true);
-        }
-        self.animating.set(true);
-    }
-
-    /// Push an event through the element tree.
+    /// Push an event through the element tree. Only marks a surface dirty if
+    /// its root element's `update()` returned `true` (state actually changed).
     pub fn update_surfaces(&mut self, event: &ShellEvent) {
         for entry in &mut self.surfaces {
             if let Some(ref mut root) = entry.root {
-                root.update(event);
+                if root.update(event) {
+                    entry.dirty.set(true);
+                }
             }
         }
     }
 
-    /// Update phase — tick all element animations. Returns true if any
-    /// animation is still active. Also tracks per-surface animation state.
+    /// Tick all element animations (regardless of dirty state) so no
+    /// in-progress animation freezes. Re-marks surfaces dirty when animation
+    /// is still active so the frame callback loop keeps them rendering.
     pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
         let mut still_moving = false;
         for entry in &mut self.surfaces {
-            if entry.renderer.is_some() && entry.dirty.get() {
-                let active = entry.tick_animations(absolute_time);
-                entry.animating.set(active);
-                if active {
-                    still_moving = true;
-                }
-            } else {
-                entry.animating.set(false);
+            if entry.renderer.is_none() {
+                continue;
+            }
+            let active = entry.tick_animations(absolute_time);
+            entry.animating.set(active);
+            if active {
+                still_moving = true;
+                entry.dirty.set(true);
             }
         }
         still_moving
@@ -136,7 +114,7 @@ impl ShellState {
             batch.sort_by_shape();
 
             // Pass 2: GPU render
-            renderer.render_frame(&ctx, || {
+            renderer.render_frame(|| {
                 renderer.render_batch(&batch, ctx.surface_w, ctx.surface_h);
             });
         }

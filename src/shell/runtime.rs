@@ -80,7 +80,6 @@ impl LoopData {
     }
 
     pub fn handle_event(&mut self, event: ShellEvent) {
-        self.state.invalidate();
         self.state.update_surfaces(&event);
     }
 
@@ -106,10 +105,6 @@ impl LoopData {
 
         for entry in &mut self.state.surfaces {
             entry.dirty.set(false);
-        }
-
-        if !still_moving {
-            self.state.set_animating(false);
         }
 
         let _ = self.wayland.conn.flush();

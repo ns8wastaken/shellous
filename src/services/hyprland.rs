@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -28,20 +28,10 @@ struct ActiveWorkspace {
 
 // ==================== HYPRLAND COMPOSITOR ====================
 
-struct ListenerIncarnation {
-    count: Arc<AtomicUsize>,
-}
-impl Drop for ListenerIncarnation {
-    fn drop(&mut self) {
-        self.count.fetch_sub(1, Ordering::AcqRel);
-    }
-}
-
 pub struct HyprlandCompositor {
     cmd_socket: String,
     evt_socket: String,
     subs: Mutex<HashMap<SubscriptionId, StateCallback>>,
-    listener_count: Arc<AtomicUsize>,
     next_sub_id: AtomicU64,
 }
 
@@ -55,7 +45,6 @@ impl HyprlandCompositor {
             cmd_socket: format!("{runtime}/hypr/{sig}/.socket.sock"),
             evt_socket: format!("{runtime}/hypr/{sig}/.socket2.sock"),
             subs: Mutex::new(HashMap::new()),
-            listener_count: Arc::new(AtomicUsize::new(0)),
             next_sub_id: AtomicU64::new(1),
         }
     }
@@ -70,10 +59,6 @@ impl HyprlandCompositor {
     }
 
     fn run_listener(self: Arc<Self>) {
-        let _guard = ListenerIncarnation {
-            count: Arc::clone(&self.listener_count),
-        };
-
         let is_target_event = |line: &str| {
             [
                 "workspace",
@@ -184,11 +169,9 @@ impl Compositor for HyprlandCompositor {
         let id = SubscriptionId(self.next_sub_id.fetch_add(1, Ordering::SeqCst));
         self.subs.lock().unwrap().insert(id, callback);
 
-        let prev = self.listener_count.fetch_add(1, Ordering::AcqRel);
-        if prev == 0 {
-            let me = Arc::clone(&self);
-            thread::spawn(move || me.run_listener());
-        }
+        let me = Arc::clone(&self);
+        thread::spawn(move || me.run_listener());
+
         id
     }
 

@@ -19,10 +19,12 @@ impl Group {
 }
 
 impl Element for Group {
-    fn update(&mut self, event: &ShellEvent) {
+    fn update(&mut self, event: &ShellEvent) -> bool {
+        let mut changed = false;
         for child in &mut self.children {
-            child.update(event);
+            changed |= child.update(event);
         }
+        changed
     }
 
     fn tick_animations(&mut self, absolute_time: f32) -> bool {
