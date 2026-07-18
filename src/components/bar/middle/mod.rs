@@ -3,6 +3,7 @@ use chrono::{DateTime, Local};
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::Size;
 use crate::components::ui::{Element, RenderContext};
+use crate::renderer::animation::cache::AnimationCache;
 use crate::renderer::batch::{DrawBatch, DrawParams};
 use crate::renderer::programs::rect::{
     CornerShape, RectStyle,
@@ -29,7 +30,7 @@ impl Default for MiddlePanel {
 }
 
 impl Element for MiddlePanel {
-    fn update(&mut self, event: &ShellEvent) -> bool {
+    fn update(&mut self, event: &ShellEvent, _now: f32, _cache: &mut AnimationCache) -> bool {
         if let ShellEvent::ClockUpdated(snapshot) = event {
             self.time = snapshot.time;
             self.time_formatted = self.time.format("%H:%M").to_string(); // format lives here
@@ -39,7 +40,7 @@ impl Element for MiddlePanel {
         }
     }
 
-    fn layout(&self, _available: Size) -> Size {
+    fn layout(&self, _available: Size, _cache: &AnimationCache) -> Size {
         Size { w: self.width, h: BAR_HEIGHT }
     }
 
@@ -71,7 +72,7 @@ impl Element for MiddlePanel {
             DrawParams::Rect(base_style.fill(0.085, 0.095, 0.110, 1.0)),
         );
 
-        let mut text_rect = node.rect;
+        let text_rect = node.rect;
 
         batch.push(
             text_rect,

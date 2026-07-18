@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use crate::components::rect::Rect;
+use crate::components::rect::{Rect, Size};
+use crate::renderer::animation::cache::AnimationCache;
 use crate::renderer::batch::DrawBatch;
 use crate::shell::compositor::Compositor;
 use crate::shell::event::ShellEvent;
@@ -47,48 +48,84 @@ impl ShellState {
 
     /// Push an event through the element tree. Only marks a surface dirty if
     /// its root element's `update()` returned `true` (state actually changed).
-    pub fn update_surfaces(&mut self, event: &ShellEvent) {
+    /// After update, re-derives chasing animation targets for the affected surface.
+    pub fn update_surfaces(&mut self, event: &ShellEvent, now: f32) {
         for entry in &mut self.surfaces {
-            if let Some(ref mut root) = entry.root {
-                if root.update(event) {
-                    entry.dirty.set(true);
+            let ManagedSurface {
+                root,
+                animations,
+                dirty,
+                layout_dirty,
+                ..
+            } = entry;
+            if let Some(r) = root.as_mut() {
+                if r.update(event, now, animations) {
+                    r.derive_targets(now, animations);
+                    dirty.set(true);
+                    layout_dirty.set(true);
                 }
             }
         }
     }
 
-    /// Tick all element animations (regardless of dirty state) so no
-    /// in-progress animation freezes. Re-marks surfaces dirty when animation
-    /// is still active so the frame callback loop keeps them rendering.
-    pub fn tick_animations(&mut self, absolute_time: f32) -> bool {
+    /// Tick all active animations (cache-driven, no element tree walk).
+    /// Re-derives chasing targets for surfaces with active animations.
+    /// Marks surfaces dirty and requests frame callbacks when animation is still
+    /// running so the frame callback loop keeps them rendering.
+    pub fn tick_animations(&mut self, now: f32) -> bool {
         let mut still_moving = false;
         for entry in &mut self.surfaces {
             if entry.renderer.is_none() {
                 continue;
             }
-            let active = entry.tick_animations(absolute_time);
-            entry.animating.set(active);
+            let ManagedSurface {
+                root,
+                animations,
+                animating,
+                dirty,
+                layout_dirty,
+                ..
+            } = entry;
+            let active = animations.tick(now);
             if active {
+                if let Some(r) = root.as_ref() {
+                    r.derive_targets(now, animations);
+                }
+                animating.set(true);
+                dirty.set(true);
+                layout_dirty.set(true);
                 still_moving = true;
-                entry.dirty.set(true);
+            } else {
+                animating.set(false);
             }
         }
         still_moving
     }
 
-    /// Build cached layout tree for all dirty surfaces.
+    /// Build cached layout tree for all surfaces with dirty layouts.
     /// Called after tick_animations, before render.
     pub fn compute_layouts(&mut self) {
         for entry in &mut self.surfaces {
-            if !entry.dirty.get() {
+            if !entry.layout_dirty.get() {
                 continue;
             }
-            let root_size = entry.root_size();
-            if let Some(root) = entry.root.as_ref() {
-                let desired = root.layout(root_size);
+            let ManagedSurface {
+                root,
+                animations,
+                layout,
+                kind,
+                layout_dirty,
+                ..
+            } = entry;
+            let (w, h) = kind.dimensions();
+            let root_size = Size { w: w as f32, h: h as f32 };
+            if let Some(r) = root.as_ref() {
+                let cache: &AnimationCache = animations;
+                let desired = r.layout(root_size, cache);
                 let root_rect = Rect::from_size(desired);
-                entry.layout = Some(root.layout_tree(root_rect));
+                *layout = Some(r.layout_tree(root_rect, cache));
             }
+            layout_dirty.set(false);
         }
     }
 

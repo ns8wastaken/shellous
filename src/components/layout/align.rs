@@ -1,6 +1,7 @@
 use crate::components::layout::Alignment;
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
+use crate::renderer::animation::cache::AnimationCache;
 use crate::renderer::batch::DrawBatch;
 use crate::components::ui::{Element, RenderContext};
 use crate::shell::event::ShellEvent;
@@ -19,24 +20,24 @@ impl Align {
 }
 
 impl Element for Align {
-    fn update(&mut self, event: &ShellEvent) -> bool {
-        self.child.update(event)
+    fn update(&mut self, event: &ShellEvent, now: f32, cache: &mut AnimationCache) -> bool {
+        self.child.update(event, now, cache)
     }
 
-    fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        self.child.tick_animations(absolute_time)
+    fn derive_targets(&self, now: f32, cache: &mut AnimationCache) {
+        self.child.derive_targets(now, cache);
     }
 
-    fn layout(&self, available: Size) -> Size {
-        self.child.layout(available)
+    fn layout(&self, available: Size, cache: &AnimationCache) -> Size {
+        self.child.layout(available, cache)
     }
 
-    fn layout_tree(&self, rect: Rect) -> LayoutNode {
-        let child_size = self.child.layout(rect.size());
+    fn layout_tree(&self, rect: Rect, cache: &AnimationCache) -> LayoutNode {
+        let child_size = self.child.layout(rect.size(), cache);
         let child_rect = self.alignment.apply(rect, child_size);
         LayoutNode {
             rect,
-            children: vec![self.child.layout_tree(child_rect)],
+            children: vec![self.child.layout_tree(child_rect, cache)],
         }
     }
 

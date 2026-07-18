@@ -10,6 +10,7 @@ use calloop::{
 };
 
 use crate::components::ui::Element;
+use crate::renderer::animation::cache::AnimationCache;
 use crate::renderer::Renderer;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
@@ -80,7 +81,8 @@ impl LoopData {
     }
 
     pub fn handle_event(&mut self, event: ShellEvent) {
-        self.state.update_surfaces(&event);
+        let now = self.anim_start.elapsed().as_secs_f32();
+        self.state.update_surfaces(&event, now);
     }
 
     fn render_frame(&mut self) {
@@ -88,8 +90,8 @@ impl LoopData {
             return;
         }
 
-        let absolute_time = self.anim_start.elapsed().as_secs_f32();
-        let still_moving = self.state.tick_animations(absolute_time);
+        let now = self.anim_start.elapsed().as_secs_f32();
+        let still_moving = self.state.tick_animations(now);
 
         if still_moving {
             let qh = self.wayland.qh();
@@ -138,11 +140,7 @@ impl Shell {
         }
     }
 
-    pub fn compositor(&self) -> &Arc<dyn Compositor> {
-        &self.state.compositor
-    }
-
-    pub fn mount(&mut self, config: SurfaceSpec) -> SurfaceId {
+    pub fn mount(&mut self, config: SurfaceSpec, animations: AnimationCache) -> SurfaceId {
         let id = self.state.next_id;
         self.state.next_id += 1;
 
@@ -188,6 +186,8 @@ impl Shell {
             dirty: Cell::new(true),
             animating: Cell::new(false),
             layout: None,
+            animations,
+            layout_dirty: Cell::new(true),
         });
 
         let surface_state_arc = {

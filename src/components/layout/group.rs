@@ -1,5 +1,6 @@
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
+use crate::renderer::animation::cache::AnimationCache;
 use crate::renderer::batch::DrawBatch;
 use crate::components::ui::{Element, RenderContext};
 use crate::shell::event::ShellEvent;
@@ -19,33 +20,30 @@ impl Group {
 }
 
 impl Element for Group {
-    fn update(&mut self, event: &ShellEvent) -> bool {
+    fn update(&mut self, event: &ShellEvent, now: f32, cache: &mut AnimationCache) -> bool {
         let mut changed = false;
         for child in &mut self.children {
-            changed |= child.update(event);
+            changed |= child.update(event, now, cache);
         }
         changed
     }
 
-    fn tick_animations(&mut self, absolute_time: f32) -> bool {
-        let mut active = false;
-        for child in &mut self.children {
-            if child.tick_animations(absolute_time) {
-                active = true;
-            }
+    fn derive_targets(&self, now: f32, cache: &mut AnimationCache) {
+        for child in &self.children {
+            child.derive_targets(now, cache);
         }
-        active
     }
 
-    fn layout(&self, available: Size) -> Size {
+    fn layout(&self, available: Size, cache: &AnimationCache) -> Size {
         // Group takes all available space
+        let _ = cache;
         available
     }
 
-    fn layout_tree(&self, rect: Rect) -> LayoutNode {
+    fn layout_tree(&self, rect: Rect, cache: &AnimationCache) -> LayoutNode {
         LayoutNode {
             rect,
-            children: self.children.iter().map(|c| c.layout_tree(rect)).collect(),
+            children: self.children.iter().map(|c| c.layout_tree(rect, cache)).collect(),
         }
     }
 
