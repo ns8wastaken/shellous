@@ -1,6 +1,6 @@
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::Size;
-use crate::components::ui::{Element, RenderContext};
+use crate::components::ui::RenderContext;
 use crate::renderer::animation::cache::{AnimationCache, AnimSlot, AnimSpec};
 use crate::renderer::animation::easing::Easing;
 use crate::renderer::batch::{DrawBatch, DrawParams};
@@ -30,15 +30,22 @@ impl WorkspaceDot {
             ),
         }
     }
-}
 
-impl Element for WorkspaceDot {
-    fn update(&mut self, event: &ShellEvent, now: f32, cache: &mut AnimationCache) -> bool {
+    pub(super) fn update(
+        &mut self,
+        event: &ShellEvent,
+        now: f32,
+        cache: &mut AnimationCache,
+    ) -> bool {
         if let ShellEvent::WorkspaceUpdated(snapshot) = event {
             let was_active = self.is_active;
             self.is_active = snapshot.active_id == self.workspace_id;
             if was_active != self.is_active {
-                let target = if self.is_active { WORKSPACE_ACTIVE_W } else { WORKSPACE_INACTIVE_W };
+                let target = if self.is_active {
+                    WORKSPACE_ACTIVE_W
+                } else {
+                    WORKSPACE_INACTIVE_W
+                };
                 cache.set_target(self.width, target, now);
                 return true;
             }
@@ -46,11 +53,14 @@ impl Element for WorkspaceDot {
         false
     }
 
-    fn layout(&self, _available: Size, cache: &AnimationCache) -> Size {
-        Size { w: cache.value(self.width), h: WORKSPACE_R * 2.0 }
+    pub(super) fn layout(&self, _available: Size, cache: &AnimationCache) -> Size {
+        Size {
+            w: cache.value(self.width),
+            h: WORKSPACE_R * 2.0,
+        }
     }
 
-    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, _ctx: &RenderContext) {
+    pub(super) fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, _ctx: &RenderContext) {
         let fill = if self.is_active {
             Color::rgb(1.0, 0.12, 0.14)
         } else {
@@ -58,14 +68,21 @@ impl Element for WorkspaceDot {
         };
         batch.push(
             node.rect,
-            DrawParams::Rect(RectStyle::solid(fill, WORKSPACE_R))
+            DrawParams::Rect(RectStyle::solid(fill, WORKSPACE_R)),
         );
     }
 
-    fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {
-        node.rect.contains(x, y) && {
-            ctx.state.compositor.activate_workspace(self.workspace_id);
-            true
-        }
+    pub(super) fn on_click(
+        &self,
+        node: &LayoutNode,
+        x: f32,
+        y: f32,
+        ctx: &RenderContext,
+    ) -> bool {
+        node.rect.contains(x, y)
+            && {
+                ctx.state.compositor.activate_workspace(self.workspace_id);
+                true
+            }
     }
 }

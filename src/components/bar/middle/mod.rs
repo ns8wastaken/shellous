@@ -2,12 +2,9 @@ use chrono::{DateTime, Local};
 
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::Size;
-use crate::components::ui::{Element, RenderContext};
-use crate::renderer::animation::cache::AnimationCache;
+use crate::components::ui::RenderContext;
 use crate::renderer::batch::{DrawBatch, DrawParams};
-use crate::renderer::programs::rect::{
-    CornerShape, RectStyle,
-};
+use crate::renderer::programs::rect::{CornerShape, RectStyle};
 use crate::renderer::programs::text::TextStyle;
 use crate::renderer::types::Color;
 use crate::shell::event::ShellEvent;
@@ -29,22 +26,22 @@ impl Default for MiddlePanel {
     }
 }
 
-impl Element for MiddlePanel {
-    fn update(&mut self, event: &ShellEvent, _now: f32, _cache: &mut AnimationCache) -> bool {
+impl MiddlePanel {
+    pub fn update(&mut self, event: &ShellEvent) -> bool {
         if let ShellEvent::ClockUpdated(snapshot) = event {
             self.time = snapshot.time;
-            self.time_formatted = self.time.format("%H:%M").to_string(); // format lives here
+            self.time_formatted = self.time.format("%H:%M").to_string();
             true
         } else {
             false
         }
     }
 
-    fn layout(&self, _available: Size, _cache: &AnimationCache) -> Size {
+    pub fn layout(&self, _available: Size) -> Size {
         Size { w: self.width, h: BAR_HEIGHT }
     }
 
-    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, _ctx: &RenderContext) {
+    pub fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, _ctx: &RenderContext) {
         let base_style = RectStyle::new()
             .corners(
                 CornerShape::Concave,
@@ -63,8 +60,8 @@ impl Element for MiddlePanel {
                     .clone()
                     .fill(0.0, 0.0, 0.0, 0.5)
                     .softness(10.0)
-                    .shadow(0.0, 0.0)
-            )
+                    .shadow(0.0, 0.0),
+            ),
         );
 
         batch.push(
@@ -80,8 +77,8 @@ impl Element for MiddlePanel {
                 TextStyle::new()
                     .text(self.time_formatted.clone())
                     .size(14.0)
-                    .color(Color::rgb(1.0, 1.0, 1.0))
-            )
+                    .color(Color::rgb(1.0, 1.0, 1.0)),
+            ),
         );
     }
 }

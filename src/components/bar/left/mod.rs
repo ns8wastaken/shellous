@@ -4,13 +4,11 @@ use crate::components::layout::stack_horizontal;
 use crate::components::layout_tree::LayoutNode;
 use crate::components::rect::{Rect, Size};
 use crate::components::keyed_list::KeyedList;
-use crate::components::ui::{Element, RenderContext};
+use crate::components::ui::RenderContext;
 use crate::renderer::animation::cache::{AnimationCache, AnimSlot, AnimSpec};
 use crate::renderer::animation::easing::Easing;
 use crate::renderer::batch::{DrawBatch, DrawParams};
-use crate::renderer::programs::rect::{
-    CornerShape, RectStyle,
-};
+use crate::renderer::programs::rect::{CornerShape, RectStyle};
 use crate::shell::event::ShellEvent;
 use crate::components::bar::BAR_HEIGHT;
 use workspace_dot::{WorkspaceDot, WORKSPACE_R};
@@ -46,17 +44,20 @@ impl LeftPanel {
             return 0.0;
         }
         let values: Vec<f32> = self.dots.iter().map(|d| cache.value(d.width)).collect();
-        values.iter().sum::<f32>()
-            + (n as f32 - 1.0) * WORKSPACE_SPACING
+        values.iter().sum::<f32>() + (n as f32 - 1.0) * WORKSPACE_SPACING
     }
-}
 
-impl Element for LeftPanel {
-    fn update(&mut self, event: &ShellEvent, now: f32, cache: &mut AnimationCache) -> bool {
+    pub fn update(
+        &mut self,
+        event: &ShellEvent,
+        now: f32,
+        cache: &mut AnimationCache,
+    ) -> bool {
         if let ShellEvent::WorkspaceUpdated(snapshot) = event {
             let mut cur_ids: Vec<i32> = snapshot.workspaces.iter().map(|w| w.id).collect();
             cur_ids.sort_unstable();
-            self.dots.reconcile(&cur_ids, |id| WorkspaceDot::new(id, cache));
+            self.dots
+                .reconcile(&cur_ids, |id| WorkspaceDot::new(id, cache));
             for dot in self.dots.iter_mut() {
                 dot.update(event, now, cache);
             }
@@ -68,35 +69,35 @@ impl Element for LeftPanel {
         }
     }
 
-    fn derive_targets(&self, now: f32, cache: &mut AnimationCache) {
+    pub fn derive_targets(&self, now: f32, cache: &mut AnimationCache) {
         let target = LEFT_PAD + self.dot_row_value(cache) + RIGHT_PAD;
         if target != cache.target(self.panel_width) {
             cache.set_target(self.panel_width, target, now);
         }
     }
 
-    fn layout(&self, _available: Size, cache: &AnimationCache) -> Size {
-        Size { w: cache.value(self.panel_width), h: BAR_HEIGHT }
+    pub fn layout(&self, _available: Size, cache: &AnimationCache) -> Size {
+        Size {
+            w: cache.value(self.panel_width),
+            h: BAR_HEIGHT,
+        }
     }
 
-    fn layout_tree(&self, rect: Rect, cache: &AnimationCache) -> LayoutNode {
+    pub fn layout_tree(&self, rect: Rect, cache: &AnimationCache) -> LayoutNode {
         let content = rect.inset(LEFT_PAD, TOP, 0.0, 0.0);
-        let dot_sizes: Vec<Size> = self.dots
+        let dot_sizes: Vec<Size> = self
+            .dots
             .iter()
             .map(|d| d.layout(rect.size(), cache))
             .collect();
         let dot_rects = stack_horizontal(content, &dot_sizes, WORKSPACE_SPACING);
         LayoutNode {
             rect,
-            children: self.dots
-                .iter()
-                .zip(dot_rects)
-                .map(|(d, r)| d.layout_tree(r, cache))
-                .collect(),
+            children: dot_rects.into_iter().map(LayoutNode::new).collect(),
         }
     }
 
-    fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, ctx: &RenderContext) {
+    pub fn draw(&self, node: &LayoutNode, batch: &mut DrawBatch, ctx: &RenderContext) {
         let corner_r = (ctx.surface_h - self.bottom_offset) / 2.0;
         let w = ctx.animations.value(self.panel_width);
         let h = ctx.surface_h;
@@ -113,7 +114,6 @@ impl Element for LeftPanel {
             .inset_right(corner_r)
             .inset_bottom(self.bottom_offset);
 
-        // Shadow pass
         batch.push(
             bg_rect,
             DrawParams::Rect(
@@ -121,23 +121,27 @@ impl Element for LeftPanel {
                     .clone()
                     .fill(0.0, 0.0, 0.0, 0.5)
                     .softness(10.0)
-                    .shadow(0.0, 0.0)
-            )
+                    .shadow(0.0, 0.0),
+            ),
         );
 
-        // Fill pass
         batch.push(
             bg_rect,
             DrawParams::Rect(base_style.fill(0.085, 0.095, 0.110, 1.0)),
         );
 
-        // Dot row
         for (dot, child_node) in self.dots.iter().zip(&node.children) {
             dot.draw(child_node, batch, ctx);
         }
     }
 
-    fn on_click(&self, node: &LayoutNode, x: f32, y: f32, ctx: &RenderContext) -> bool {
+    pub fn on_click(
+        &self,
+        node: &LayoutNode,
+        x: f32,
+        y: f32,
+        ctx: &RenderContext,
+    ) -> bool {
         for i in (0..self.dots.items.len()).rev() {
             let (_, dot) = &self.dots.items[i];
             let child_node = &node.children[i];

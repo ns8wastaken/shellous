@@ -9,8 +9,8 @@ use calloop::{
     EventLoop, Interest, Mode, PostAction,
 };
 
-use crate::components::ui::Element;
-use crate::renderer::animation::cache::AnimationCache;
+use crate::components::arena::Slot;
+use crate::components::ui::ElementArena;
 use crate::renderer::Renderer;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
@@ -32,7 +32,7 @@ pub struct LayerSpec {
     pub height: i32,
     pub exclusive_zone: i32,
     pub layer: ShellLayer,
-    pub root: Option<Box<dyn Element>>,
+    pub root: Option<Slot>,
 }
 
 pub struct ToplevelSpec {
@@ -40,7 +40,7 @@ pub struct ToplevelSpec {
     pub app_id: String,
     pub min_size: Option<(i32, i32)>,
     pub max_size: Option<(i32, i32)>,
-    pub root: Option<Box<dyn Element>>,
+    pub root: Option<Slot>,
 }
 
 pub enum SurfaceSpec {
@@ -140,11 +140,16 @@ impl Shell {
         }
     }
 
-    pub fn mount(&mut self, config: SurfaceSpec, animations: AnimationCache) -> SurfaceId {
+    pub fn mount(
+        &mut self,
+        config: SurfaceSpec,
+        animations: crate::renderer::animation::cache::AnimationCache,
+        arena: ElementArena,
+    ) -> SurfaceId {
         let id = self.state.next_id;
         self.state.next_id += 1;
 
-        let (kind, root): (SurfaceKind, Option<Box<dyn Element>>) = match config {
+        let (kind, root): (SurfaceKind, Option<Slot>) = match config {
             SurfaceSpec::Layer(spec) => {
                 let layer_surface = LayerSurface::new(
                     &self.wayland,
@@ -180,6 +185,7 @@ impl Shell {
         self.state.register(ManagedSurface {
             id,
             root,
+            arena,
             kind,
             renderer: None,
             frame_pending: Cell::new(false),
@@ -266,7 +272,7 @@ impl Shell {
 
         for module in &modules {
             if let Some(evt) = module.initial_event() {
-                data.handle_event(evt); // same update_surfaces() path as any later event
+                data.handle_event(evt);
             }
         }
 

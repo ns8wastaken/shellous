@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crate::components::arena::Slot;
 use crate::components::rect::{Rect, Size};
-use crate::renderer::animation::cache::AnimationCache;
+use crate::components::ui::ElementArena;
 use crate::renderer::batch::DrawBatch;
 use crate::shell::compositor::Compositor;
 use crate::shell::event::ShellEvent;
@@ -46,21 +47,48 @@ impl ShellState {
         self.surfaces.iter().any(|s| s.dirty.get())
     }
 
-    /// Push an event through the element tree. Only marks a surface dirty if
-    /// its root element's `update()` returned `true` (state actually changed).
-    /// After update, re-derives chasing animation targets for the affected surface.
+    fn update_tree(
+        arena: &mut ElementArena,
+        slot: Slot,
+        event: &ShellEvent,
+        now: f32,
+        cache: &mut crate::renderer::animation::cache::AnimationCache,
+    ) -> bool {
+        let children: Vec<Slot> = arena
+            .get(slot)
+            .map(|n| n.children().to_vec())
+            .unwrap_or_default();
+
+        let self_changed = arena
+            .get_mut(slot)
+            .map(|n| n.update(event, now, cache))
+            .unwrap_or(false);
+
+        let mut child_changed = false;
+        for child_slot in children {
+            child_changed |= Self::update_tree(arena, child_slot, event, now, cache);
+        }
+
+        self_changed || child_changed
+    }
+
     pub fn update_surfaces(&mut self, event: &ShellEvent, now: f32) {
         for entry in &mut self.surfaces {
             let ManagedSurface {
                 root,
+                arena,
                 animations,
                 dirty,
                 layout_dirty,
                 ..
             } = entry;
-            if let Some(r) = root.as_mut() {
-                if r.update(event, now, animations) {
-                    r.derive_targets(now, animations);
+            if let Some(root_slot) = root {
+                let changed = Self::update_tree(arena, *root_slot, event, now, animations);
+                if changed {
+                    arena
+                        .get(*root_slot)
+                        .unwrap()
+                        .derive_targets(now, animations, arena);
                     dirty.set(true);
                     layout_dirty.set(true);
                 }
@@ -68,10 +96,6 @@ impl ShellState {
         }
     }
 
-    /// Tick all active animations (cache-driven, no element tree walk).
-    /// Re-derives chasing targets for surfaces with active animations.
-    /// Marks surfaces dirty and requests frame callbacks when animation is still
-    /// running so the frame callback loop keeps them rendering.
     pub fn tick_animations(&mut self, now: f32) -> bool {
         let mut still_moving = false;
         for entry in &mut self.surfaces {
@@ -80,6 +104,7 @@ impl ShellState {
             }
             let ManagedSurface {
                 root,
+                arena,
                 animations,
                 animating,
                 dirty,
@@ -88,8 +113,11 @@ impl ShellState {
             } = entry;
             let active = animations.tick(now);
             if active {
-                if let Some(r) = root.as_ref() {
-                    r.derive_targets(now, animations);
+                if let Some(root_slot) = root {
+                    arena
+                        .get(*root_slot)
+                        .unwrap()
+                        .derive_targets(now, animations, arena);
                 }
                 animating.set(true);
                 dirty.set(true);
@@ -102,8 +130,6 @@ impl ShellState {
         still_moving
     }
 
-    /// Build cached layout tree for all surfaces with dirty layouts.
-    /// Called after tick_animations, before render.
     pub fn compute_layouts(&mut self) {
         for entry in &mut self.surfaces {
             if !entry.layout_dirty.get() {
@@ -111,27 +137,33 @@ impl ShellState {
             }
             let ManagedSurface {
                 root,
-                animations,
+                arena,
                 layout,
                 kind,
+                animations,
                 layout_dirty,
                 ..
             } = entry;
             let (w, h) = kind.dimensions();
             let root_size = Size { w: w as f32, h: h as f32 };
-            if let Some(r) = root.as_ref() {
-                let cache: &AnimationCache = animations;
-                let desired = r.layout(root_size, cache);
+            if let Some(root_slot) = root {
+                let cache: &crate::renderer::animation::cache::AnimationCache = animations;
+                let desired = arena
+                    .get(*root_slot)
+                    .unwrap()
+                    .layout(root_size, cache, arena);
                 let root_rect = Rect::from_size(desired);
-                *layout = Some(r.layout_tree(root_rect, cache));
+                *layout = Some(
+                    arena
+                        .get(*root_slot)
+                        .unwrap()
+                        .layout_tree(root_rect, cache, arena),
+                );
             }
             layout_dirty.set(false);
         }
     }
 
-    /// Render phase — two-pass pipeline (layout is already cached):
-    ///   1. Geometry batching (CPU memory)
-    ///   2. GPU render
     pub fn render(&self) {
         for entry in &self.surfaces {
             if !entry.dirty.get() || entry.renderer.is_none() {
@@ -141,16 +173,17 @@ impl ShellState {
             renderer.make_current();
             let ctx = entry.render_context(self);
 
-            // Pass 1: Geometry batching (CPU memory) from cached layout
             let mut batch = DrawBatch::new();
-            if let (Some(root), Some(layout)) = (&entry.root, &entry.layout) {
-                root.draw(layout, &mut batch, &ctx);
+            if let (Some(root_slot), Some(layout)) = (entry.root, &entry.layout) {
+                entry
+                    .arena
+                    .get(root_slot)
+                    .unwrap()
+                    .draw(layout, &mut batch, &ctx);
             }
 
-            // Sort by shape so the GPU dispatch hits each program once
             batch.sort_by_shape();
 
-            // Pass 2: GPU render
             renderer.render_frame(|| {
                 renderer.render_batch(&batch, ctx.surface_w, ctx.surface_h);
             });
