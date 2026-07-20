@@ -1,4 +1,4 @@
-use crate::components::rect::Rect;
+use crate::components::geom::Rect;
 
 #[derive(Clone, Debug)]
 pub struct LayoutNode {

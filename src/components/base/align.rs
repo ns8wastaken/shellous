@@ -1,5 +1,5 @@
 use crate::components::arena::Slot;
-use crate::components::layout::Alignment;
+use crate::components::base::alignment::Alignment;
 
 // ponytail: Align stores child as a Slot — the child lives in the per-surface
 // arena, not as an owned trait object.

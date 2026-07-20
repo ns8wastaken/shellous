@@ -9,8 +9,8 @@ use calloop::{
     EventLoop, Interest, Mode, PostAction,
 };
 
-use crate::components::arena::Slot;
-use crate::components::ui::ElementArena;
+use crate::{components::arena::Slot, renderer::animation::cache::AnimationCache};
+use crate::components::ui::{Controller, ElementArena};
 use crate::renderer::Renderer;
 use crate::shell::compositor::Compositor;
 use crate::shell::egl::EglState;
@@ -143,8 +143,9 @@ impl Shell {
     pub fn mount(
         &mut self,
         config: SurfaceSpec,
-        animations: crate::renderer::animation::cache::AnimationCache,
+        animations: AnimationCache,
         arena: ElementArena,
+        controllers: Vec<Box<dyn Controller>>,
     ) -> SurfaceId {
         let id = self.state.next_id;
         self.state.next_id += 1;
@@ -194,6 +195,7 @@ impl Shell {
             layout: None,
             animations,
             layout_dirty: Cell::new(true),
+            controllers,
         });
 
         let surface_state_arc = {

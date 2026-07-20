@@ -4,8 +4,9 @@ use wayland_client::QueueHandle;
 
 use crate::components::arena::Slot;
 use crate::components::layout_tree::LayoutNode;
-use crate::components::ui::RenderContext;
-use crate::components::ui::ElementArena;
+use crate::components::ui::{Controller, RenderContext, ElementArena};
+use crate::renderer::Renderer;
+use crate::renderer::animation::cache::AnimationCache;
 use crate::shell::state::ShellState;
 use crate::shell::surface::{Surface, SurfaceKind};
 use crate::shell::surface_id::SurfaceId;
@@ -15,13 +16,14 @@ pub struct ManagedSurface {
     pub root: Option<Slot>,
     pub arena: ElementArena,
     pub kind: SurfaceKind,
-    pub renderer: Option<crate::renderer::Renderer>,
+    pub renderer: Option<Renderer>,
     pub frame_pending: Cell<bool>,
     pub dirty: Cell<bool>,
     pub animating: Cell<bool>,
     pub layout: Option<LayoutNode>,
-    pub animations: crate::renderer::animation::cache::AnimationCache,
+    pub animations: AnimationCache,
     pub layout_dirty: Cell<bool>,
+    pub controllers: Vec<Box<dyn Controller>>,
 }
 
 impl ManagedSurface {
@@ -44,6 +46,13 @@ impl ManagedSurface {
     }
 
     pub fn on_click(&self, x: f32, y: f32, ctx: &RenderContext) {
+        for controller in &self.controllers {
+            if let Some(layout) = &self.layout {
+                if controller.on_click(x, y, &self.arena, layout, ctx) {
+                    return;
+                }
+            }
+        }
         if let (Some(root_slot), Some(layout)) = (self.root, &self.layout) {
             self.arena
                 .get(root_slot)

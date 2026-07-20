@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::components::arena::Slot;
-use crate::components::rect::{Rect, Size};
-use crate::components::ui::ElementArena;
+use crate::components::geom::{Rect, Size};
+
 use crate::renderer::batch::DrawBatch;
+use crate::renderer::animation::cache::AnimationCache;
 use crate::shell::compositor::Compositor;
 use crate::shell::event::ShellEvent;
 use crate::shell::managed_surface::ManagedSurface;
@@ -47,51 +47,31 @@ impl ShellState {
         self.surfaces.iter().any(|s| s.dirty.get())
     }
 
-    fn update_tree(
-        arena: &mut ElementArena,
-        slot: Slot,
-        event: &ShellEvent,
-        now: f32,
-        cache: &mut crate::renderer::animation::cache::AnimationCache,
-    ) -> bool {
-        let children: Vec<Slot> = arena
-            .get(slot)
-            .map(|n| n.children().to_vec())
-            .unwrap_or_default();
-
-        let self_changed = arena
-            .get_mut(slot)
-            .map(|n| n.update(event, now, cache))
-            .unwrap_or(false);
-
-        let mut child_changed = false;
-        for child_slot in children {
-            child_changed |= Self::update_tree(arena, child_slot, event, now, cache);
-        }
-
-        self_changed || child_changed
-    }
-
     pub fn update_surfaces(&mut self, event: &ShellEvent, now: f32) {
         for entry in &mut self.surfaces {
             let ManagedSurface {
-                root,
+                controllers,
                 arena,
                 animations,
                 dirty,
                 layout_dirty,
                 ..
             } = entry;
-            if let Some(root_slot) = root {
-                let changed = Self::update_tree(arena, *root_slot, event, now, animations);
-                if changed {
-                    arena
-                        .get(*root_slot)
-                        .unwrap()
-                        .derive_targets(now, animations, arena);
-                    dirty.set(true);
-                    layout_dirty.set(true);
+
+            let mut any_changed = false;
+            for ctrl in controllers.iter_mut() {
+                if ctrl.update(event, now, animations, arena) {
+                    any_changed = true;
                 }
+            }
+
+            if any_changed {
+                let (w, h) = entry.kind.dimensions();
+                for ctrl in controllers.iter() {
+                    ctrl.sync(now, animations, arena, w as f32, h as f32);
+                }
+                dirty.set(true);
+                layout_dirty.set(true);
             }
         }
     }
@@ -103,7 +83,7 @@ impl ShellState {
                 continue;
             }
             let ManagedSurface {
-                root,
+                controllers,
                 arena,
                 animations,
                 animating,
@@ -111,13 +91,12 @@ impl ShellState {
                 layout_dirty,
                 ..
             } = entry;
+
             let active = animations.tick(now);
             if active {
-                if let Some(root_slot) = root {
-                    arena
-                        .get(*root_slot)
-                        .unwrap()
-                        .derive_targets(now, animations, arena);
+                let (w, h) = entry.kind.dimensions();
+                for ctrl in controllers.iter() {
+                    ctrl.sync(now, animations, arena, w as f32, h as f32);
                 }
                 animating.set(true);
                 dirty.set(true);
@@ -147,12 +126,14 @@ impl ShellState {
             let (w, h) = kind.dimensions();
             let root_size = Size { w: w as f32, h: h as f32 };
             if let Some(root_slot) = root {
-                let cache: &crate::renderer::animation::cache::AnimationCache = animations;
-                let desired = arena
-                    .get(*root_slot)
+                let cache: &AnimationCache = animations;
+                // layout() is still called so nested Align/containers can
+                // compute child sizes, but the root rect always spans the
+                // full compositor-assigned surface dimensions.
+                arena.get(*root_slot)
                     .unwrap()
                     .layout(root_size, cache, arena);
-                let root_rect = Rect::from_size(desired);
+                let root_rect = Rect::from_size(root_size);
                 *layout = Some(
                     arena
                         .get(*root_slot)

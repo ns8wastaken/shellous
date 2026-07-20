@@ -1,4 +1,4 @@
-use crate::components::rect::{Rect, Size};
+use crate::components::geom::{Rect, Size};
 
 // ==================== ALIGNMENT ====================
 
@@ -23,5 +23,3 @@ impl Alignment {
         }
     }
 }
-
-

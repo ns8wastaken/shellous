@@ -1,4 +1,4 @@
-use crate::components::rect::Rect;
+use crate::components::geom::Rect;
 use crate::renderer::programs::rect::RectStyle;
 use crate::renderer::programs::text::TextStyle;
 
