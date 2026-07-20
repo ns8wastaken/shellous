@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use crate::components::base::Element;
 use crate::components::geom::{Rect, Size};
-
 use crate::renderer::batch::DrawBatch;
 use crate::renderer::animation::cache::AnimationCache;
 use crate::shell::compositor::Compositor;

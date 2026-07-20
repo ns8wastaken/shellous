@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 
 use crate::components::arena::Slot;
-use crate::components::base::group::Group;
+use crate::components::base::group::GroupNode;
 use crate::components::base::rect::RectNode;
 use crate::components::base::text::TextNode;
 use crate::components::geom::Size;
@@ -35,7 +35,7 @@ impl MiddlePanelController {
 
         let text = arena.insert(Node::Text(TextNode::new("", 14.0, Color::rgb(1.0, 1.0, 1.0))));
         let bg = arena.insert(Node::Rect(RectNode::new(Size::new(260.0, BAR_HEIGHT), base_style.fill(0.085, 0.095, 0.110, 1.0))));
-        let root = arena.insert(Node::Group(Group::new(vec![bg, text])));
+        let root = arena.insert(Node::Group(GroupNode::new(vec![bg, text])));
 
         let ctrl = MiddlePanelController {
             text_slot: text,

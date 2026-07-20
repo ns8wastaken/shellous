@@ -3,6 +3,7 @@ use std::cell::Cell;
 use wayland_client::QueueHandle;
 
 use crate::components::arena::Slot;
+use crate::components::base::Element;
 use crate::components::layout_tree::LayoutNode;
 use crate::components::ui::{Controller, RenderContext, ElementArena};
 use crate::renderer::Renderer;

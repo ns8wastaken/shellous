@@ -7,8 +7,8 @@ use middle_panel::MiddlePanelController;
 
 use crate::components::arena::Arena;
 use crate::components::base::Alignment;
-use crate::components::base::align::Align;
-use crate::components::base::group::Group;
+use crate::components::base::align::AlignNode;
+use crate::components::base::group::GroupNode;
 use crate::components::ui::{Controller, Node};
 use crate::renderer::animation::cache::AnimationCache;
 use crate::shell::compositor::Compositor;
@@ -23,14 +23,14 @@ pub fn mount(shell: &mut Shell, compositor: Arc<dyn Compositor>) {
     let mut arena: Arena<Node> = Arena::new();
 
     let (middle_root, middle_ctrl) = MiddlePanelController::mount(&mut arena);
-    let align = arena.insert(Node::Align(Align::new(middle_root, Alignment::TopCenter)));
+    let align = arena.insert(Node::Align(AlignNode::new(middle_root, Alignment::TopCenter)));
     let (left_root, left_ctrl) = LeftPanelController::mount(
         compositor,
         offset as f32,
         &mut arena,
         &mut cache
     );
-    let root = arena.insert(Node::Group(Group::new(vec![left_root, align])));
+    let root = arena.insert(Node::Group(GroupNode::new(vec![left_root, align])));
 
     let controllers: Vec<Box<dyn Controller>> = vec![
         Box::new(middle_ctrl),

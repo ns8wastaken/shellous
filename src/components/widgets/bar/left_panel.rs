@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::components::arena::{Arena, Slot};
-use crate::components::base::group::Group;
-use crate::components::base::padding::Padding;
+use crate::components::base::group::GroupNode;
+use crate::components::base::padding::PaddingNode;
 use crate::components::base::rect::RectNode;
 use crate::components::base::row::RowNode;
 use crate::components::geom::Size;
@@ -67,8 +67,8 @@ impl LeftPanelController {
 
         let bg = arena.insert(Node::Rect(RectNode::new(Size::new(0.0, 0.0), bg_style)));
         let row = arena.insert(Node::Row(RowNode::new(vec![], WORKSPACE_SPACING)));
-        let content = arena.insert(Node::Padding(Padding::new(row, (LEFT_PAD, TOP_PAD, 0.0, 0.0))));
-        let root = arena.insert(Node::Group(Group::new(vec![bg, content])));
+        let content = arena.insert(Node::Padding(PaddingNode::new(row, (LEFT_PAD, TOP_PAD, 0.0, 0.0))));
+        let root = arena.insert(Node::Group(GroupNode::new(vec![bg, content])));
 
         let panel_width_slot = cache.insert(
             AnimSpec::new(LEFT_PAD + RIGHT_PAD)
